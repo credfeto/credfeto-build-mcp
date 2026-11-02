@@ -160,6 +160,7 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         {
             bool failed = await this.RunStepsAsync(job);
             await CollectCoverageAsync(job: job, cancellationToken: job.Cancellation.Token);
+            await CollectChangedFilesAsync(job: job, cancellationToken: job.Cancellation.Token);
             job.Finish(state: failed ? JobState.Failed : JobState.Succeeded, message: null);
         }
         catch (OperationCanceledException) when (job.Cancellation.IsCancellationRequested)
@@ -255,6 +256,16 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         }
 
         job.SetCoverage(coverage: reports.Count == 0 ? null : CoverageAggregator.Combine(reports), errors: errors);
+    }
+
+    private static async ValueTask CollectChangedFilesAsync(RunningJob job, CancellationToken cancellationToken)
+    {
+        if (job.Definition.ChangedFiles is not { } probe)
+        {
+            return;
+        }
+
+        job.SetChangedFiles(await probe.CollectAsync(cancellationToken));
     }
 
     private RunningJob[] EvictFinishedJobs()

@@ -60,6 +60,45 @@ public sealed class DotnetCommandsTests : TestBase
     }
 
     [Fact]
+    public static void TestOfTheWholeSolutionIsOneMicrosoftTestingPlatformRun()
+    {
+        ProcessStep step = DotnetCommands.TestSolution(Repository);
+
+        Assert.Equal(expected: "/workspace/repo/src", actual: step.WorkingDirectory);
+        Assert.Equal(expected: ["test", "--solution", "Example.slnx", "-c", "Release"], actual: step.Arguments, comparer: StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public static void QualityToolsRunFromTheRepositoryRootWithFixedArguments()
+    {
+        Assert.Equal(expected: ["tool", "restore"], actual: DotnetCommands.ToolRestore(Repository).Arguments, comparer: StringComparer.Ordinal);
+        Assert.Equal(
+            expected: ["buildcheck", "-Solution", "/workspace/repo/src/Example.slnx", "-WarningAsErrors", "true", "-PreReleaseBuild", "true"],
+            actual: DotnetCommands.BuildCheck(repository: Repository, preRelease: true).Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: ["changelog", "--changelog", "/workspace/repo/CHANGELOG.md", "--lint"],
+            actual: DotnetCommands.ChangelogLint(Repository).Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: ["cscleanup", "/workspace/repo/src/A.cs", "/workspace/repo/src/B.cs"],
+            actual: DotnetCommands.Cleanup(repository: Repository, name: "cscleanup", files: ["/workspace/repo/src/A.cs", "/workspace/repo/src/B.cs"]).Arguments,
+            comparer: StringComparer.Ordinal
+        );
+
+        ProcessStep buildtest = DotnetCommands.Buildtest(repository: Repository, script: "/usr/local/bin/buildtest");
+        Assert.Equal(expected: "/usr/local/bin/buildtest", actual: buildtest.FileName);
+        Assert.Empty(buildtest.Arguments);
+
+        foreach (ProcessStep step in new[] { DotnetCommands.ToolRestore(Repository), DotnetCommands.BuildCheck(repository: Repository, preRelease: false), DotnetCommands.ChangelogLint(Repository), buildtest })
+        {
+            Assert.Equal(expected: "/workspace/repo", actual: step.WorkingDirectory);
+        }
+    }
+
+    [Fact]
     public static void BuildNodesDoNotOutliveTheStep()
     {
         ProcessStep step = DotnetCommands.Build(Repository);

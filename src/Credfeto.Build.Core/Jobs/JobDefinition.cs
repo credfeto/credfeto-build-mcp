@@ -16,4 +16,8 @@ public sealed record JobDefinition(
     ITestOutputParser? TestParser,
     IReadOnlyList<string> CoverageFiles,
     string? HeadSha
-);
+)
+{
+    /// <summary>When set, collects the files the job changed once its steps have run.</summary>
+    public IChangedFilesProbe? ChangedFiles { get; init; }
+}

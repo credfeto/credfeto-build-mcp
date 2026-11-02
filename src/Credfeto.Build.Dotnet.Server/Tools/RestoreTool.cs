@@ -1,6 +1,5 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 
@@ -8,10 +7,9 @@ namespace Credfeto.Build.Dotnet.Server.Tools;
 
 public sealed class RestoreTool : BuildTool
 {
-    private readonly DotnetRepository _repository;
-    private readonly IJobRunner _runner;
+    private readonly ToolContext _context;
 
-    public RestoreTool(DotnetRepository repository, IJobRunner runner)
+    public RestoreTool(ToolContext context)
         : base(
             name: ToolNames.RESTORE,
             title: "Restore packages",
@@ -20,19 +18,21 @@ public sealed class RestoreTool : BuildTool
             readOnly: false
         )
     {
-        this._repository = repository;
-        this._runner = runner;
+        this._context = context;
     }
 
-    protected override ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
     {
-        return JobStarter.StartAsync(
-            runner: this._runner,
-            repository: this._repository,
+        DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
+
+        return await JobStarter.StartAsync(
+            runner: this._context.Runner,
+            repository: repository,
             kind: ToolNames.RESTORE,
-            steps: [DotnetCommands.Restore(this._repository)],
+            steps: [DotnetCommands.Restore(repository)],
             testParser: null,
             coverageFiles: [],
+            changedFiles: null,
             cancellationToken: cancellationToken
         );
     }

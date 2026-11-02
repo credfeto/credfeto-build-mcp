@@ -1,6 +1,5 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 
@@ -8,31 +7,32 @@ namespace Credfeto.Build.Dotnet.Server.Tools;
 
 public sealed class BuildSolutionTool : BuildTool
 {
-    private readonly DotnetRepository _repository;
-    private readonly IJobRunner _runner;
+    private readonly ToolContext _context;
 
-    public BuildSolutionTool(DotnetRepository repository, IJobRunner runner)
+    public BuildSolutionTool(ToolContext context)
         : base(
             name: ToolNames.BUILD,
             title: "Build (Release)",
-            description: "Starts a job that runs dotnet build -c Release on the solution. Returns the job id at once; poll job_status, then read job_result",
+            description: "Starts a job that builds the whole solution: dotnet build <solution> -c Release from the solution directory. Returns the job id at once; poll job_status, then read job_result",
             schema: [],
             readOnly: false
         )
     {
-        this._repository = repository;
-        this._runner = runner;
+        this._context = context;
     }
 
-    protected override ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
     {
-        return JobStarter.StartAsync(
-            runner: this._runner,
-            repository: this._repository,
+        DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
+
+        return await JobStarter.StartAsync(
+            runner: this._context.Runner,
+            repository: repository,
             kind: ToolNames.BUILD,
-            steps: [DotnetCommands.Build(this._repository)],
+            steps: [DotnetCommands.Build(repository)],
             testParser: null,
             coverageFiles: [],
+            changedFiles: null,
             cancellationToken: cancellationToken
         );
     }

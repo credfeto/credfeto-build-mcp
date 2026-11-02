@@ -85,12 +85,25 @@ public sealed class ToolCallTests : TestBase, IDisposable
     }
 
     [Fact]
-    public async Task TestWithNoArgumentsRunsEveryUnitTestProjectAsync()
+    public async Task TestWithNoArgumentsIsOneSolutionWideRunAsync()
     {
         CallToolResult result = await this.CallAsync(name: "test", arguments: []);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
-        Assert.Equal(expected: 2, actual: Assert.Single(this._runner.Started).Steps.Count);
+        ProcessStep step = Assert.Single(Assert.Single(this._runner.Started).Steps);
+        Assert.Equal(expected: ["test", "--solution", "Example.slnx", "-c", "Release"], actual: step.Arguments, comparer: StringComparer.Ordinal);
+        Assert.Equal(expected: this._repository.Combine("src"), actual: step.WorkingDirectory);
+    }
+
+    [Fact]
+    public async Task BuildIsTheWholeSolutionAsync()
+    {
+        CallToolResult result = await this.CallAsync(name: "build", arguments: []);
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        ProcessStep step = Assert.Single(Assert.Single(this._runner.Started).Steps);
+        Assert.Equal(expected: ["build", "Example.slnx", "-c", "Release"], actual: step.Arguments, comparer: StringComparer.Ordinal);
+        Assert.Equal(expected: this._repository.Combine("src"), actual: step.WorkingDirectory);
     }
 
     [Theory]
@@ -167,16 +180,14 @@ public sealed class ToolCallTests : TestBase, IDisposable
 
     private ValueTask<CallToolResult> CallAsync(string name, Dictionary<string, JsonElement> arguments)
     {
-        IReadOnlyList<McpServerTool> tools = DotnetToolCatalog.Create(
+        IReadOnlyList<McpServerTool> tools = TestContexts.Tools(
+            runner: this._runner,
             detection: TestRepositories.Detected(
                 TestRepositories.Create(root: this._repository.Path, TestRepositories.CoreTests, TestRepositories.ApiTests)
-            ),
-            runner: this._runner
+            )
         );
 
-        BuildTool tool = (BuildTool)tools.Single(candidate => StringComparer.Ordinal.Equals(x: candidate.ProtocolTool.Name, y: name));
-
-        return tool.CallAsync(arguments: arguments, cancellationToken: this.CancellationToken());
+        return TestContexts.Find(tools: tools, name: name).CallAsync(arguments: arguments, cancellationToken: this.CancellationToken());
     }
 
     private static Dictionary<string, JsonElement> Arguments(string name, string value)

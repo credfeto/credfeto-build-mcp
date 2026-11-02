@@ -63,7 +63,7 @@ public abstract class BuildTool : McpServerTool
             return Result(text: json, isError: false);
         }
         catch (Exception exception)
-            when (exception is ToolArgumentException or JobNotFoundException or JobAlreadyRunningException)
+            when (exception is ToolArgumentException or ToolUnavailableException or JobNotFoundException or JobAlreadyRunningException)
         {
             // These messages are fixed text, never caller input or process output
             return Result(text: exception.Message, isError: true);

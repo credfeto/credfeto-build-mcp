@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,6 +33,24 @@ internal static class SampleRepository
           </PropertyGroup>
         </Project>
         """;
+
+    /// <summary>Adds a project to the solution and writes its project file, as dotnet new and dotnet sln add would.</summary>
+    public static async ValueTask AddProjectAsync(TemporaryDirectory repository, string name, CancellationToken cancellationToken)
+    {
+        _ = await repository.WriteAsync(relative: "src/" + name + "/" + name + ".csproj", content: PROJECT, cancellationToken: cancellationToken);
+
+        string solution = repository.Combine("src/Example.slnx");
+        string content = await File.ReadAllTextAsync(path: solution, cancellationToken: cancellationToken);
+        await File.WriteAllTextAsync(
+            path: solution,
+            contents: content.Replace(
+                oldValue: "</Solution>",
+                newValue: "  <Project Path=\"" + name + "/" + name + ".csproj\" />\n</Solution>",
+                comparisonType: StringComparison.Ordinal
+            ),
+            cancellationToken: cancellationToken
+        );
+    }
 
     public static async ValueTask WriteAsync(TemporaryDirectory repository, CancellationToken cancellationToken)
     {

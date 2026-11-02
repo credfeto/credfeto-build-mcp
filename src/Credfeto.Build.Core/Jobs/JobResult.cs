@@ -19,5 +19,6 @@ public sealed record JobResult(
     string? CoverageMarkdown,
     IReadOnlyList<string> CoverageErrors,
     string? HeadSha,
-    string? Message
+    string? Message,
+    IReadOnlyList<string>? ChangedFiles
 );

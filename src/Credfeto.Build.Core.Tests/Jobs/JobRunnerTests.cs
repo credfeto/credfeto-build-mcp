@@ -196,6 +196,28 @@ public sealed class JobRunnerTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task ChangedFilesAreCollectedAfterTheStepsAsync()
+    {
+        this._launcher.Prints(step: "a", exitCode: 1, "formatting failed");
+        FixedChangedFilesProbe probe = new("src/A.cs");
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a") with { ChangedFiles = probe });
+
+        Assert.Equal(expected: JobState.Failed, actual: result.State);
+        Assert.Equal(expected: ["src/A.cs"], actual: result.ChangedFiles, comparer: StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithoutAProbeThereAreNoChangedFilesAsync()
+    {
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
+
+        Assert.Null(result.ChangedFiles);
+    }
+
+    [Fact]
     public async Task OldestFinishedJobsAreEvictedAsync()
     {
         await using JobRunner runner = this.CreateRunner(JobRunnerSettings.Create(this._logs.Path) with { MaxRetainedJobs = 2 });

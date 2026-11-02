@@ -15,5 +15,6 @@ public sealed record ProcessStep(
     IReadOnlyDictionary<string, string> Environment
 )
 {
-    public string CommandLine => this.FileName + " " + string.Join(separator: ' ', values: this.Arguments);
+    public string CommandLine =>
+        this.Arguments.Count == 0 ? this.FileName : this.FileName + " " + string.Join(separator: ' ', values: this.Arguments);
 }
