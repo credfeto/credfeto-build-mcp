@@ -153,31 +153,55 @@ executable. `enabled: false` turns the server off for the repository. `solution`
 the repository. `timeoutMinutes` is clamped to 1-240. Unknown properties, invalid JSON or a file over 64 KiB make the
 server ignore the whole file, and `detect` reports why.
 
-### Publishing and start-up time
+### Installation
 
-The server is published as a trimmed Native AOT binary, and the publish fails on any trim or AOT warning:
+The server ships as a dotnet global tool packaged per platform with Native AOT. The `Credfeto.Build.Dotnet.Server`
+package is a small pointer package; the `dotnet` CLI then fetches the matching RID-specific package
+(`Credfeto.Build.Dotnet.Server.linux-x64`), which holds only the native executable, so no .NET runtime is needed to
+run it:
+
+```bash
+dotnet tool install -g Credfeto.Build.Dotnet.Server
+```
+
+This puts the command `credfeto-build-dotnet` in `~/.dotnet/tools`. Only `linux-x64` is packaged for now: Native AOT
+cannot cross-compile to another architecture, so `linux-arm64` needs to be packed on an arm64 build host.
+
+### Packing, publishing and start-up time
+
+For a Native AOT tool the SDK packs the pointer package and each RID-specific package in separate `dotnet pack`
+runs (it can't AOT-compile other RIDs from the outer pack):
+
+```bash
+cd src
+dotnet pack -c Release
+dotnet pack Credfeto.Build.Dotnet.Server/Credfeto.Build.Dotnet.Server.csproj -c Release -r linux-x64
+```
+
+To get just the binary instead, publish it. The publish fails on any trim or AOT warning:
 
 ```bash
 cd src
 dotnet publish Credfeto.Build.Dotnet.Server/Credfeto.Build.Dotnet.Server.csproj -c Release -r linux-x64
 ```
 
-The binary needs no .NET runtime to start. From process start to the `tools/list` reply, detection included, it must
-take under 200 ms. `StartupTimeTests` measures this against the published binary: set `BUILD_MCP_SERVER_BINARY` to
-its path and run the server tests. Without the variable, those tests are skipped.
+From process start to the `tools/list` reply, detection included, the server must take under 200 ms.
+`StartupTimeTests` measures this against the native binary: set `BUILD_MCP_SERVER_BINARY` to its path (the published
+binary or the installed `credfeto-build-dotnet`) and run the server tests. Without the variable, those tests are
+skipped.
 
 ### Registering it (oneshot)
 
 The orchestrator's managed MCP config is fixed in the image, so every language server is always registered and each
-decides for itself whether it applies. The image will install the published binary and register it as a stdio
-server, for example:
+decides for itself whether it applies. The image installs the tool with `dotnet tool install -g` and registers it in
+`claude-managed-mcp.json` as a stdio server:
 
 ```json
 {
   "mcpServers": {
     "build-dotnet": {
       "type": "stdio",
-      "command": "/usr/local/bin/credfeto-build-dotnet",
+      "command": "/home/developer/.dotnet/tools/credfeto-build-dotnet",
       "env": { "BUILD_MCP_REPO_ROOT": "/workspace/repo" }
     }
   }
@@ -189,10 +213,11 @@ server, for example:
 Not in this first version:
 
 - the Node and Python servers on the same core;
-- the orchestrator side: installing the binary in the image, registering it in the managed MCP config, allowing its
+- the orchestrator side: installing the tool in the image, registering it in the managed MCP config, allowing its
   tools in managed settings, and then denying raw `dotnet build`, `dotnet test`, `dotnet exec` and
   `dotnet reportgenerator` in Bash;
-- a CI step that publishes the server with AOT and runs `StartupTimeTests` against the binary.
+- a CI step that packs the RID-specific tool package(s) with AOT, and runs `StartupTimeTests` against the binary;
+- a `linux-arm64` tool package, packed on an arm64 host.
 
 ## Changelog
 
