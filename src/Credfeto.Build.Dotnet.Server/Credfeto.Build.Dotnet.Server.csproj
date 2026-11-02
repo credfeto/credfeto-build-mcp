@@ -11,6 +11,8 @@
     <Description>Credfeto Build MCP .NET server: restore, build, test and coverage over stdio MCP</Description>
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <Features>strict;flow-analysis</Features>
@@ -22,6 +24,7 @@
     <IncludeSymbols>false</IncludeSymbols>
     <InvariantGlobalization>true</InvariantGlobalization>
     <IsPackable>true</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
     <IsPublishable>true</IsPublishable>
     <IsTrimmable>true</IsTrimmable>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
@@ -40,6 +43,7 @@
     <PackageTags>MCP, build, test, coverage, dotnet, tool, command line</PackageTags>
     <Product>Credfeto Build MCP .NET server</Product>
     <PublishAot>true</PublishAot>
+    <PublishTrimmed>true</PublishTrimmed>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/credfeto/credfeto-build-mcp</RepositoryUrl>
     <RunAOTCompilation>false</RunAOTCompilation>
@@ -51,6 +55,7 @@
     <ToolCommandName>credfeto-build-dotnet</ToolCommandName>
     <ToolPackageRuntimeIdentifiers>linux-x64</ToolPackageRuntimeIdentifiers>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TrimMode>full</TrimMode>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <ValidateExecutableReferencesMatchSelfContained>true</ValidateExecutableReferencesMatchSelfContained>
     <WarningsAsErrors />
