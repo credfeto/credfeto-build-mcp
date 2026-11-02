@@ -11,6 +11,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
+- .NET build, test and coverage MCP server (`credfeto-build-dotnet`), a Native AOT stdio server, and the shared core: job runner, repository detection, Cobertura parsing and `.ai/commands.json` overrides
 ### Fixed
 ### Changed
 ### Deprecated
