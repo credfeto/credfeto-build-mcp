@@ -1,10 +1,8 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Testing;
@@ -18,14 +16,13 @@ public sealed class CoverageTool : BuildTool
 {
     public const string ALL = "all";
 
+    private readonly ToolContext _context;
     private readonly SchemaProperty _project;
-    private readonly DotnetRepository _repository;
-    private readonly IJobRunner _runner;
 
-    public CoverageTool(DotnetRepository repository, IJobRunner runner)
-        : this(repository: repository, runner: runner, project: ProjectProperty(repository)) { }
+    public CoverageTool(DotnetRepository repository, ToolContext context)
+        : this(context: context, project: ProjectProperty(repository)) { }
 
-    private CoverageTool(DotnetRepository repository, IJobRunner runner, SchemaProperty project)
+    private CoverageTool(ToolContext context, SchemaProperty project)
         : base(
             name: ToolNames.COVERAGE,
             title: "Measure line coverage",
@@ -34,32 +31,27 @@ public sealed class CoverageTool : BuildTool
             readOnly: false
         )
     {
-        this._repository = repository;
-        this._runner = runner;
+        this._context = context;
         this._project = project;
     }
 
-    protected override ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
     {
-        string choice = arguments.GetChoice(this._project) ?? ALL;
+        DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
+        string choice = arguments.GetChoice(property: this._project, allowed: [ALL, .. UnitTestProjectChoice.Names(repository)]) ?? ALL;
+        IReadOnlyList<DotnetProject> projects = UnitTestProjectChoice.Select(repository: repository, choice: choice, all: ALL);
 
-        DotnetProject[] projects =
-        [
-            .. this._repository.UnitTestProjects.Where(project =>
-                StringComparer.Ordinal.Equals(x: choice, y: ALL) || StringComparer.Ordinal.Equals(x: project.Name, y: choice)
-            ),
-        ];
+        string[] coverageFiles = [.. projects.Select(project => DotnetCommands.CoverageFile(repository: repository, project: project))];
+        PrepareCoverageDirectory(repository: repository, coverageFiles: coverageFiles);
 
-        string[] coverageFiles = [.. projects.Select(project => DotnetCommands.CoverageFile(repository: this._repository, project: project))];
-        PrepareCoverageDirectory(repository: this._repository, coverageFiles: coverageFiles);
-
-        return JobStarter.StartAsync(
-            runner: this._runner,
-            repository: this._repository,
+        return await JobStarter.StartAsync(
+            runner: this._context.Runner,
+            repository: repository,
             kind: ToolNames.COVERAGE,
-            steps: [.. projects.Select(project => DotnetCommands.Coverage(repository: this._repository, project: project))],
+            steps: [.. projects.Select(project => DotnetCommands.Coverage(repository: repository, project: project))],
             testParser: new MtpTestOutputParser(),
             coverageFiles: coverageFiles,
+            changedFiles: null,
             cancellationToken: cancellationToken
         );
     }
@@ -80,7 +72,7 @@ public sealed class CoverageTool : BuildTool
         return new(
             Name: "project",
             Description: "The unit test project to measure, or all to measure each one in turn",
-            Values: [ALL, .. repository.UnitTestProjects.Select(static project => project.Name)],
+            Values: [ALL, .. UnitTestProjectChoice.Names(repository)],
             Pattern: null,
             DefaultValue: ALL,
             Required: false

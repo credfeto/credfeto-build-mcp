@@ -16,6 +16,7 @@ public static class DotnetCommands
     public const string CONFIGURATION = "Release";
     public const string COVERAGE_DIRECTORY = "coverage";
     public const string COVERAGE_FILE_SUFFIX = ".coverage.cobertura.xml";
+    public const string CHANGELOG_FILE = "CHANGELOG.md";
 
     private static readonly IReadOnlyDictionary<string, string> Environment = new Dictionary<string, string>(StringComparer.Ordinal)
     {
@@ -34,14 +35,76 @@ public static class DotnetCommands
         return Step(name: "restore", repository: repository, arguments: ["restore", SolutionFileName(repository)]);
     }
 
+    /// <summary>The whole solution, from the solution directory.</summary>
     public static ProcessStep Build(DotnetRepository repository)
     {
         return Step(name: "build", repository: repository, arguments: ["build", SolutionFileName(repository), "-c", CONFIGURATION]);
     }
 
+    /// <summary>
+    ///     One Microsoft.Testing.Platform run over every test project in the solution, integration tests included,
+    ///     as CI runs it.
+    /// </summary>
+    public static ProcessStep TestSolution(DotnetRepository repository)
+    {
+        return Step(name: "test", repository: repository, arguments: ["test", "--solution", SolutionFileName(repository), "-c", CONFIGURATION]);
+    }
+
     public static ProcessStep Test(DotnetRepository repository, DotnetProject project)
     {
         return Step(name: "test " + project.Name, repository: repository, arguments: TestArguments(repository: repository, project: project));
+    }
+
+    /// <summary>Restores the tools in the repository's tool manifest; every quality tool runs this first.</summary>
+    public static ProcessStep ToolRestore(DotnetRepository repository)
+    {
+        return RootStep(name: "tool restore", repository: repository, fileName: DOTNET, arguments: ["tool", "restore"]);
+    }
+
+    public static ProcessStep BuildCheck(DotnetRepository repository, bool preRelease)
+    {
+        return RootStep(
+            name: "buildcheck",
+            repository: repository,
+            fileName: DOTNET,
+            arguments:
+            [
+                "buildcheck",
+                "-Solution",
+                repository.SolutionPath,
+                "-WarningAsErrors",
+                "true",
+                "-PreReleaseBuild",
+                preRelease ? "true" : "false",
+            ]
+        );
+    }
+
+    /// <summary>Formats the given files (absolute paths); <paramref name="name" /> tells batches apart.</summary>
+    public static ProcessStep Cleanup(DotnetRepository repository, string name, IReadOnlyList<string> files)
+    {
+        return RootStep(name: name, repository: repository, fileName: DOTNET, arguments: ["cscleanup", .. files]);
+    }
+
+    public static ProcessStep ChangelogLint(DotnetRepository repository)
+    {
+        return RootStep(
+            name: "changelog lint",
+            repository: repository,
+            fileName: DOTNET,
+            arguments: ["changelog", "--changelog", ChangelogPath(repository), "--lint"]
+        );
+    }
+
+    /// <summary>The installed pre-commit buildtest script, with no arguments, from the repository root.</summary>
+    public static ProcessStep Buildtest(DotnetRepository repository, string script)
+    {
+        return RootStep(name: "buildtest", repository: repository, fileName: script, arguments: []);
+    }
+
+    public static string ChangelogPath(DotnetRepository repository)
+    {
+        return Path.Combine(path1: repository.RepositoryRoot, path2: CHANGELOG_FILE);
     }
 
     /// <summary>
@@ -95,6 +158,17 @@ public static class DotnetCommands
     private static string SolutionFileName(DotnetRepository repository)
     {
         return Path.GetFileName(repository.SolutionPath);
+    }
+
+    private static ProcessStep RootStep(string name, DotnetRepository repository, string fileName, IReadOnlyList<string> arguments)
+    {
+        return new(
+            Name: name,
+            FileName: fileName,
+            Arguments: arguments,
+            WorkingDirectory: repository.RepositoryRoot,
+            Environment: Environment
+        );
     }
 
     private static ProcessStep Step(string name, DotnetRepository repository, IReadOnlyList<string> arguments)

@@ -28,14 +28,31 @@ to a `.sln`. It reads the solution's C# projects and sorts them by name:
 
 - `*.Tests` are unit test projects, unless the project sets `IsTestProject` or `IsTestingPlatformApplication` to
   `false`;
-- `*.Integration.Tests` and `*.Benchmark.Tests` are listed, but the test and coverage tools never run them.
+- `*.Integration.Tests` and `*.Benchmark.Tests` are listed, but are never offered as a `project` to `test` or
+  `coverage`. Only the solution-wide `test` run (scope `all`) includes them.
 
 If no solution is found, the server **registers no tools**: `tools/list` returns an empty list and the server's
 instructions say why. A repository with a solution but no unit test projects gets every tool except `test` and
 `coverage`.
 
-Detection runs once, before the server answers its first request. The result holds for the whole session, so a
-project added later needs a server restart.
+### Keeping up with the repository
+
+The server runs for a whole session while the repository changes underneath it, so the tool list is not frozen at
+start-up:
+
+- **Watch.** Once the server is up, a `FileSystemWatcher` watches the repository root recursively for `*.csproj`,
+  `*.sln` and `*.slnx` files and `.ai/commands.json` being created, deleted, renamed or edited, and for directories
+  coming and going. Anything under `bin/`, `obj/` or `.git/` is ignored. Changes are debounced (500 ms), then
+  detection runs again. When the result differs, the server rebuilds the tool list and its `project` enums in one
+  change and sends `notifications/tools/list_changed`; it declares `tools.listChanged: true`. The same mechanism turns
+  the tools on when a solution first appears and off when it goes.
+- **Validate every call.** Each tool call detects the repository afresh and checks its `project` against that, not
+  against the enum the client last read. A project added after start-up is accepted even by a client that never
+  re-reads the schema, and a deleted one is refused. A call made after the solution has gone fails with a clear
+  message.
+
+If the watch cannot start (the repository root is missing, or the system's inotify limits are reached), the server
+carries on without it; the per-call check still applies.
 
 ### Repository root
 
@@ -47,6 +64,7 @@ so the agent never composes a `cd`.
 |----------|---------|---------|
 | `BUILD_MCP_REPO_ROOT` | `/workspace/repo` | The repository to work on. Relative paths are ignored. |
 | `BUILD_MCP_LOG_DIR` | `$TMPDIR/credfeto-build-mcp` | Where each job writes its full log (`<job id>.log`, mode 0600). |
+| `BUILD_MCP_BUILDTEST` | `buildtest` on `PATH` | The absolute path of the pre-commit `buildtest` script that the `buildtest` tool runs. |
 
 ### Tools
 
@@ -55,23 +73,45 @@ outside the enum is refused without anything being run.
 
 | Tool | Parameters | What it does |
 |------|------------|--------------|
-| `detect` | none | The solution, its projects, the unit, integration and benchmark test projects, the timeout and any overrides error. |
+| `detect` | none | The solution, its projects, the unit, integration and benchmark test projects, the timeout and any overrides error, detected afresh. |
 | `restore` | none | Starts `dotnet restore <solution>`. |
-| `build` | none | Starts `dotnet build <solution> -c Release`. |
-| `test` | `scope`: `all` (default) or `project`; `project`: one of the unit test projects | Starts `dotnet test <Project>/<Project>.csproj -c Release -p:SolutionDir=<src>/` for each chosen project, one at a time. |
-| `coverage` | `project`: `all` (default) or one of the unit test projects | Starts the coverage run below for each chosen project, one at a time. |
+| `build` | none | Starts `dotnet build <solution> -c Release` from the solution directory: the whole solution. |
+| `test` | `scope`: `all` (default) or `project`; `project`: one of the unit test projects | `all` starts one solution-wide run, `dotnet test --solution <solution> -c Release` from the solution directory, which includes integration tests as CI does. `project` starts `dotnet test <Project>/<Project>.csproj -c Release -p:SolutionDir=<src>/` for that project only. |
+| `coverage` | `project`: `all` (default) or one of the unit test projects | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. |
+| `buildcheck` | `mode`: `pre_release` (default) or `release` | Starts `dotnet tool restore`, then `dotnet buildcheck -Solution <absolute solution> -WarningAsErrors true -PreReleaseBuild <true\|false>`. |
+| `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |
+| `changelog_lint` | none | Starts `dotnet tool restore`, then `dotnet changelog --changelog <repo>/CHANGELOG.md --lint`. |
+| `buildtest` | none | Starts the installed pre-commit `buildtest` script, with no arguments, from the repository root. |
 | `job_status` | `id` | Whether the job is still running, how long it has run and which step it is on. |
-| `job_result` | `id` | The outcome: state, each step's exit code, test counts, failing test names, coverage, the masked last 40 lines of output, and the log path. |
+| `job_result` | `id` | The outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. |
 
-`restore`, `build`, `test` and `coverage` start a **job** and return its id at once, so no MCP call or Bash timeout
-applies to a long build. Poll `job_status` until `state` is no longer `running`, then read `job_result`. One job runs
-at a time; starting another while one is running is refused. A job is killed when it exceeds its timeout (30
-minutes by default), and when the server shuts down.
+Every tool except `detect`, `job_status` and `job_result` starts a **job** and returns its id at once, so no MCP
+call or Bash timeout applies to a long build. Poll `job_status` until `state` is no longer `running`, then read
+`job_result`. One job runs at a time; starting another while one is running is refused. A job is killed when it
+exceeds its timeout (30 minutes by default, `buildtest` included), and when the server shuts down.
 
 Each step runs as a fixed argument vector, never through a shell. Output is stripped of ANSI codes and masked before
 it is logged or returned: the values of environment variables whose names look secret (`*TOKEN*`, `*SECRET*`,
 `*PASSWORD*`, `*API_KEY*` and similar), GitHub tokens, `Bearer`/`Basic` credentials, `password=`-style pairs and
 credentials in URLs. Lines are capped at 4,096 characters and each log at 16 MiB.
+
+### Quality tools and buildtest
+
+`buildcheck`, `cleanup` and `changelog_lint` run the repository's own .NET tools from its tool manifest, from the
+repository root, so the versions are the ones the repository pins. Each job runs `dotnet tool restore` first. A
+repository with no `.config/dotnet-tools.json` or `dotnet-tools.json` gets a clear tool error and no job;
+`changelog_lint` also needs a `CHANGELOG.md` at the root.
+
+`cleanup` picks its files with git. The default branch is `origin/HEAD`, else the first of `origin/main`,
+`origin/master`, `main` and `master` that exists. Files under `bin/` or `obj/`, and files that no longer exist, are
+left out. When nothing has changed, no job starts. The files are hashed before and after the run, so `changedFiles`
+lists exactly the ones the formatter rewrote.
+
+`buildtest` is the "everything pre-commit checks" run. It runs the installed credfeto-global-pre-commit `buildtest`
+script itself rather than a copy of its steps, so the tool follows the script when the script changes. The script
+is `BUILD_MCP_BUILDTEST` (an absolute path) if set, otherwise `buildtest` on `PATH`, looked up on every call. If it
+cannot be found, the call fails with a message saying so. `build`, `test`, `coverage` and the quality tools stay for
+quicker iteration.
 
 ### Coverage
 
@@ -148,7 +188,6 @@ server, for example:
 
 Not in this first version:
 
-- `lint` and `format` tools (`dotnet buildcheck` and `dotnet cscleanup`);
 - the Node and Python servers on the same core;
 - the orchestrator side: installing the binary in the image, registering it in the managed MCP config, allowing its
   tools in managed settings, and then denying raw `dotnet build`, `dotnet test`, `dotnet exec` and

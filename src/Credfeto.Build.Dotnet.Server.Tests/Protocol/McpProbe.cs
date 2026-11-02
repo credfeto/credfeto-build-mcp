@@ -11,10 +11,10 @@ namespace Credfeto.Build.Dotnet.Server.Tests.Protocol;
 /// <summary>A minimal MCP client: initialize, initialized, then tools/list, as newline-delimited JSON-RPC.</summary>
 internal static class McpProbe
 {
-    private const string INITIALIZE =
+    public const string INITIALIZE =
         """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1.0"}}}""";
 
-    private const string INITIALIZED = """{"jsonrpc":"2.0","method":"notifications/initialized"}""";
+    public const string INITIALIZED = """{"jsonrpc":"2.0","method":"notifications/initialized"}""";
 
     private const string LIST_TOOLS = """{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""";
 
@@ -37,16 +37,21 @@ internal static class McpProbe
                 .Select(static tool => tool.GetProperty("name").GetString() ?? string.Empty),
         ];
 
+        bool advertisesTools = initializeResult.GetProperty("capabilities").TryGetProperty(propertyName: "tools", value: out JsonElement tools);
+
         return new(
             ToolNames: names,
-            AdvertisesTools: initializeResult.GetProperty("capabilities").TryGetProperty(propertyName: "tools", value: out _),
+            AdvertisesTools: advertisesTools,
+            AdvertisesListChanged: advertisesTools
+                && tools.TryGetProperty(propertyName: "listChanged", value: out JsonElement listChanged)
+                && listChanged.ValueKind == JsonValueKind.True,
             Instructions: initializeResult.TryGetProperty(propertyName: "instructions", value: out JsonElement instructions)
                 ? instructions.GetString()
                 : null
         );
     }
 
-    private static async ValueTask SendAsync(Stream toServer, string message, CancellationToken cancellationToken)
+    public static async ValueTask SendAsync(Stream toServer, string message, CancellationToken cancellationToken)
     {
         await toServer.WriteAsync(buffer: Encoding.UTF8.GetBytes(message + "\n"), cancellationToken: cancellationToken);
         await toServer.FlushAsync(cancellationToken);

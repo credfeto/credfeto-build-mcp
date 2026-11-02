@@ -19,6 +19,7 @@ internal sealed class RunningJob : IAsyncDisposable
     private CoverageSummary? _coverage;
     private IReadOnlyList<string> _coverageErrors = [];
     private string? _message;
+    private IReadOnlyList<string>? _changedFiles;
 
     public RunningJob(
         string id,
@@ -113,6 +114,14 @@ internal sealed class RunningJob : IAsyncDisposable
         }
     }
 
+    public void SetChangedFiles(IReadOnlyList<string> changedFiles)
+    {
+        lock (this._lock)
+        {
+            this._changedFiles = changedFiles;
+        }
+    }
+
     public void Finish(JobState state, string? message)
     {
         lock (this._lock)
@@ -175,7 +184,8 @@ internal sealed class RunningJob : IAsyncDisposable
                     : CoverageMarkdown.Format(summary: this._coverage, headSha: this.Definition.HeadSha),
                 CoverageErrors: this._coverageErrors,
                 HeadSha: this.Definition.HeadSha,
-                Message: this._message
+                Message: this._message,
+                ChangedFiles: this._changedFiles
             );
         }
     }

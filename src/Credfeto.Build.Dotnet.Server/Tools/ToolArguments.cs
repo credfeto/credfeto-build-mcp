@@ -44,6 +44,15 @@ public sealed partial class ToolArguments
 
     public string? GetChoice(SchemaProperty property)
     {
+        return this.GetChoice(property: property, allowed: property.Values);
+    }
+
+    /// <summary>
+    ///     Checks the value against <paramref name="allowed" /> rather than the enum in the published schema, so a
+    ///     choice that depends on the repository is checked against what is there now.
+    /// </summary>
+    public string? GetChoice(SchemaProperty property, IReadOnlyList<string>? allowed)
+    {
         string? value = this.GetString(property.Name);
 
         if (value is null)
@@ -51,9 +60,13 @@ public sealed partial class ToolArguments
             return property.DefaultValue;
         }
 
-        if (property.Values is not null && !property.Values.Contains(value: value, comparer: StringComparer.Ordinal))
+        if (allowed is not null && !allowed.Contains(value: value, comparer: StringComparer.Ordinal))
         {
-            throw new ToolArgumentException("Invalid value for " + property.Name + "; expected one of: " + string.Join(separator: ", ", values: property.Values));
+            throw new ToolArgumentException(
+                allowed.Count == 0
+                    ? "Invalid value for " + property.Name + "; there is nothing to choose from now"
+                    : "Invalid value for " + property.Name + "; expected one of: " + string.Join(separator: ", ", values: allowed)
+            );
         }
 
         return value;

@@ -6,7 +6,7 @@ public static class JobIdProperty
     {
         return new(
             Name: "id",
-            Description: "The job id returned by restore, build, test or coverage",
+            Description: "The job id returned by a tool that starts a job",
             Values: null,
             Pattern: ToolArguments.JOB_ID_PATTERN,
             DefaultValue: null,

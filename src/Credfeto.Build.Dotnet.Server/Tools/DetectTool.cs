@@ -6,46 +6,49 @@ using Credfeto.Build.Core.Repository;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Json;
 using Credfeto.Build.Dotnet.Server.Models;
+using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
 public sealed class DetectTool : BuildTool
 {
-    private readonly DotnetDetection _detection;
-    private readonly DotnetRepository _repository;
+    private readonly ToolContext _context;
 
-    public DetectTool(DotnetDetection detection, DotnetRepository repository)
+    public DetectTool(ToolContext context)
         : base(
             name: ToolNames.DETECT,
             title: "Detect .NET",
-            description: "Lists the solution, its projects and the unit test projects the test and coverage tools can run (*.Tests, excluding *.Integration.Tests and *.Benchmark.Tests), as found when the server started",
+            description: "Lists the solution, its projects and the unit test projects the test and coverage tools can run (*.Tests, excluding *.Integration.Tests and *.Benchmark.Tests), as they are now (the repository is detected afresh on every call)",
             schema: [],
             readOnly: true
         )
     {
-        this._detection = detection;
-        this._repository = repository;
+        this._context = context;
     }
 
-    protected override ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
     {
+        DotnetDetection detection = await this._context.Detection.RefreshAsync(cancellationToken);
+        DotnetRepository repository = detection.Repository
+            ?? throw new ToolUnavailableException("There is no .NET solution in the repository any more (" + detection.Reason + ")");
+
         DetectResponse response = new(
-            RepositoryRoot: this._repository.RepositoryRoot,
-            Solution: RepositoryPaths.RelativeTo(root: this._repository.RepositoryRoot, path: this._repository.SolutionPath),
-            SolutionDirectory: RepositoryPaths.RelativeTo(root: this._repository.RepositoryRoot, path: this._repository.SolutionDirectory),
-            Projects: [.. this._repository.Projects.Select(static project => project.RelativePath)],
-            UnitTestProjects: [.. this._repository.UnitTestProjects.Select(static project => project.Name)],
-            IntegrationTestProjects: this.NamesOf(DotnetProjectKind.IntegrationTests),
-            BenchmarkTestProjects: this.NamesOf(DotnetProjectKind.BenchmarkTests),
-            TimeoutMinutes: (int)this._repository.Timeout.TotalMinutes,
-            OverridesError: this._detection.OverridesError
+            RepositoryRoot: repository.RepositoryRoot,
+            Solution: RepositoryPaths.RelativeTo(root: repository.RepositoryRoot, path: repository.SolutionPath),
+            SolutionDirectory: RepositoryPaths.RelativeTo(root: repository.RepositoryRoot, path: repository.SolutionDirectory),
+            Projects: [.. repository.Projects.Select(static project => project.RelativePath)],
+            UnitTestProjects: [.. repository.UnitTestProjects.Select(static project => project.Name)],
+            IntegrationTestProjects: NamesOf(repository: repository, kind: DotnetProjectKind.IntegrationTests),
+            BenchmarkTestProjects: NamesOf(repository: repository, kind: DotnetProjectKind.BenchmarkTests),
+            TimeoutMinutes: (int)repository.Timeout.TotalMinutes,
+            OverridesError: detection.OverridesError
         );
 
-        return ValueTask.FromResult(JsonSerializer.Serialize(value: response, jsonTypeInfo: DotnetJsonContext.Default.DetectResponse));
+        return JsonSerializer.Serialize(value: response, jsonTypeInfo: DotnetJsonContext.Default.DetectResponse);
     }
 
-    private string[] NamesOf(DotnetProjectKind kind)
+    private static string[] NamesOf(DotnetRepository repository, DotnetProjectKind kind)
     {
-        return [.. this._repository.Projects.Where(project => project.Kind == kind).Select(static project => project.Name)];
+        return [.. repository.Projects.Where(project => project.Kind == kind).Select(static project => project.Name)];
     }
 }

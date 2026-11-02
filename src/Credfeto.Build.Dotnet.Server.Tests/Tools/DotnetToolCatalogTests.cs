@@ -15,10 +15,7 @@ public sealed class DotnetToolCatalogTests : TestBase
     [Fact]
     public static void NoDotnetMeansNoTools()
     {
-        IReadOnlyList<McpServerTool> tools = DotnetToolCatalog.Create(
-            detection: TestRepositories.NotDetected("/workspace/repo"),
-            runner: new RecordingJobRunner()
-        );
+        IReadOnlyList<McpServerTool> tools = TestContexts.Tools(runner: new RecordingJobRunner(), detection: TestRepositories.NotDetected("/workspace/repo"));
 
         Assert.Empty(tools);
     }
@@ -27,7 +24,7 @@ public sealed class DotnetToolCatalogTests : TestBase
     public static void DotnetRepositoryGetsEveryTool()
     {
         Assert.Equal(
-            expected: ["build", "coverage", "detect", "job_result", "job_status", "restore", "test"],
+            expected: ["build", "buildcheck", "buildtest", "changelog_lint", "cleanup", "coverage", "detect", "job_result", "job_status", "restore", "test"],
             actual: Names(Create(TestRepositories.CoreTests, TestRepositories.ApiTests)),
             comparer: StringComparer.Ordinal
         );
@@ -37,7 +34,7 @@ public sealed class DotnetToolCatalogTests : TestBase
     public static void WithoutUnitTestProjectsThereIsNoTestOrCoverage()
     {
         Assert.Equal(
-            expected: ["build", "detect", "job_result", "job_status", "restore"],
+            expected: ["build", "buildcheck", "buildtest", "changelog_lint", "cleanup", "detect", "job_result", "job_status", "restore"],
             actual: Names(Create()),
             comparer: StringComparer.Ordinal
         );
@@ -76,12 +73,25 @@ public sealed class DotnetToolCatalogTests : TestBase
         }
     }
 
+    [Fact]
+    public static void QualityToolsTakeOnlyEnums()
+    {
+        IReadOnlyList<McpServerTool> tools = Create(TestRepositories.CoreTests);
+
+        Assert.Equal(expected: ["pre_release", "release"], actual: Enum(schema: Schema(tools: tools, name: "buildcheck"), property: "mode"), comparer: StringComparer.Ordinal);
+        Assert.Equal(expected: ["changed", "all"], actual: Enum(schema: Schema(tools: tools, name: "cleanup"), property: "scope"), comparer: StringComparer.Ordinal);
+        Assert.Empty(Schema(tools: tools, name: "changelog_lint").GetProperty("properties").EnumerateObject());
+        Assert.Empty(Schema(tools: tools, name: "buildtest").GetProperty("properties").EnumerateObject());
+    }
+
     [Theory]
     [InlineData("detect", true)]
     [InlineData("job_status", true)]
     [InlineData("job_result", true)]
     [InlineData("build", false)]
     [InlineData("coverage", false)]
+    [InlineData("cleanup", false)]
+    [InlineData("buildtest", false)]
     public static void OnlyQueryToolsAreReadOnly(string name, bool readOnly)
     {
         McpServerTool tool = Create(TestRepositories.CoreTests).Single(candidate => StringComparer.Ordinal.Equals(x: candidate.ProtocolTool.Name, y: name));
@@ -91,9 +101,9 @@ public sealed class DotnetToolCatalogTests : TestBase
 
     private static IReadOnlyList<McpServerTool> Create(params Credfeto.Build.Dotnet.Server.Detection.DotnetProject[] unitTests)
     {
-        return DotnetToolCatalog.Create(
-            detection: TestRepositories.Detected(TestRepositories.Create(root: "/workspace/repo", unitTests)),
-            runner: new RecordingJobRunner()
+        return TestContexts.Tools(
+            runner: new RecordingJobRunner(),
+            detection: TestRepositories.Detected(TestRepositories.Create(root: "/workspace/repo", unitTests))
         );
     }
 

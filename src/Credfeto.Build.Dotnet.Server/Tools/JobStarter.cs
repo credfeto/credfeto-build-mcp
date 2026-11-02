@@ -18,6 +18,7 @@ public static class JobStarter
         IReadOnlyList<ProcessStep> steps,
         ITestOutputParser? testParser,
         IReadOnlyList<string> coverageFiles,
+        IChangedFilesProbe? changedFiles,
         CancellationToken cancellationToken
     )
     {
@@ -31,7 +32,10 @@ public static class JobStarter
             TestParser: testParser,
             CoverageFiles: coverageFiles,
             HeadSha: headSha
-        );
+        )
+        {
+            ChangedFiles = changedFiles,
+        };
 
         JobStatus status = await runner.StartAsync(definition);
 
