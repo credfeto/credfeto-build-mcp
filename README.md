@@ -169,14 +169,21 @@ cannot cross-compile to another architecture, so `linux-arm64` needs to be packe
 
 ### Packing, publishing and start-up time
 
-For a Native AOT tool the SDK packs the pointer package and each RID-specific package in separate `dotnet pack`
-runs (it can't AOT-compile other RIDs from the outer pack):
+For a Native AOT tool the SDK on its own packs only the pointer package from a plain `dotnet pack`, and skips the
+RID-specific packages (it can't AOT-compile other RIDs from the outer pack). The server project adds a
+`_PackAotRidSpecificToolPackages` target that runs after `Pack` and packs each RID in `ToolPackageRuntimeIdentifiers`
+with the same version and output folder, so the plain pack that CI runs produces both
+`Credfeto.Build.Dotnet.Server.<version>.nupkg` and `Credfeto.Build.Dotnet.Server.linux-x64.<version>.nupkg`:
 
 ```bash
 cd src
 dotnet pack -c Release
-dotnet pack Credfeto.Build.Dotnet.Server/Credfeto.Build.Dotnet.Server.csproj -c Release -r linux-x64
 ```
+
+Every RID listed in `ToolPackageRuntimeIdentifiers` must be AOT-buildable on the packing host, so the pack has to run
+on linux-x64. To pack only the RID-specific package, add `-r linux-x64` and pack the project instead of the solution.
+The tool pack takes every file in the publish folder, so delete `bin/Release/net10.0/linux-x64/publish` before
+repacking locally.
 
 To get just the binary instead, publish it. The publish fails on any trim or AOT warning:
 
@@ -216,7 +223,7 @@ Not in this first version:
 - the orchestrator side: installing the tool in the image, registering it in the managed MCP config, allowing its
   tools in managed settings, and then denying raw `dotnet build`, `dotnet test`, `dotnet exec` and
   `dotnet reportgenerator` in Bash;
-- a CI step that packs the RID-specific tool package(s) with AOT, and runs `StartupTimeTests` against the binary;
+- a CI step that runs `StartupTimeTests` against the AOT binary;
 - a `linux-arm64` tool package, packed on an arm64 host.
 
 ## Changelog
