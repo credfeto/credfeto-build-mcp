@@ -94,4 +94,22 @@
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
     </ItemGroup>
   </Target>
+  <!--
+    Native AOT tool: a plain (RID-less) `dotnet pack` only makes the pointer package. The SDK's _CreateRIDSpecificToolPackages
+    skips the RID-specific packages when the inner builds are AOT (_InnerToolsPublishAot), because AOT can't cross-compile.
+    Pack them here instead, under the same condition the SDK skips them, so CI's plain pack writes the pointer package and
+    every ToolPackageRuntimeIdentifiers package to the same folder. The inner packs inherit the outer pack's global properties
+    (Configuration, Version, PackageOutputPath, ...) and environment (ReleaseNotes). Each RID must be AOT-buildable on the host.
+  -->
+  <Target Name="_PackAotRidSpecificToolPackages" AfterTargets="Pack" Condition="'$(RuntimeIdentifier)' == '' and '$(PackAsTool)' == 'true' and '$(CreateRidSpecificToolPackages)' == 'true' and '$(_InnerToolsPublishAot)' == 'true'">
+    <PropertyGroup>
+      <_AotToolPackageRids>$(ToolPackageRuntimeIdentifiers)</_AotToolPackageRids>
+      <_AotToolPackageRids Condition="'$(_AotToolPackageRids)' == ''">$(RuntimeIdentifiers)</_AotToolPackageRids>
+    </PropertyGroup>
+    <ItemGroup>
+      <_AotToolPackageRid Include="$(_AotToolPackageRids)" />
+      <_AotToolPackageProject Include="$(MSBuildProjectFullPath)" AdditionalProperties="RuntimeIdentifier=%(_AotToolPackageRid.Identity)" />
+    </ItemGroup>
+    <MSBuild Projects="@(_AotToolPackageProject)" Targets="Pack" />
+  </Target>
 </Project>
