@@ -12,7 +12,6 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 ### Fixed
-- .NET server: a plain `dotnet pack -c Release` now also packs the `Credfeto.Build.Dotnet.Server.linux-x64` Native AOT tool package next to the pointer package, so CI publishes both and `dotnet tool install -g Credfeto.Build.Dotnet.Server` works
 ### Changed
 ### Deprecated
 ### Removed
@@ -21,6 +20,10 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
+## [0.0.2] - 2026-11-03
+### Fixed
+- .NET server: a plain `dotnet pack -c Release` now also packs the `Credfeto.Build.Dotnet.Server.linux-x64` Native AOT tool package next to the pointer package, so CI publishes both and `dotnet tool install -g Credfeto.Build.Dotnet.Server` works
 
 ## [0.0.1] - 2026-11-02
 ### Added
