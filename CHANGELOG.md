@@ -14,6 +14,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Fixed
 - git commands (and the test helper) no longer inherit the repository-locating `GIT_*` variables git sets for hooks, so the test suite run from a worktree's pre-commit hook no longer commits into, branches or reconfigures the real repository
 - Jobs: a job's log file is now flushed and closed as soon as the job finishes (success, failure, timeout or cancellation), before `job_status` reports it finished, so a wait on the log returns straight away instead of running to its timeout
+- TBD - to be finalized after review
 ### Changed
 - All projects target net11.0; the redundant Microsoft.Extensions.DependencyInjection.Abstractions package reference is dropped (it is part of the framework)
 - SDK - Updated DotNet SDK to 11.0.100-rc.3.26522.148
