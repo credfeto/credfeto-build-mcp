@@ -14,7 +14,7 @@ that speaks MCP over stdio.
 ## Projects
 
 | Project | What it is |
-|---------|------------|
+| ------- | ---------- |
 | `Credfeto.Build.Core` | The shared core (AOT-compatible library): the job runner, repository helpers, Cobertura parsing and the `.ai/commands.json` overrides. |
 | `Credfeto.Build.Dotnet.Server` | The `.NET` server (`credfeto-build-dotnet`), a Native AOT executable. |
 | `*.Tests` | Unit tests for each of the above. |
@@ -61,7 +61,7 @@ absolute path, and otherwise `/workspace/repo`. Every command runs with a fixed 
 so the agent never composes a `cd`.
 
 | Variable | Default | Meaning |
-|----------|---------|---------|
+| -------- | ------- | ------- |
 | `BUILD_MCP_REPO_ROOT` | `/workspace/repo` | The repository to work on. Relative paths are ignored. |
 | `BUILD_MCP_LOG_DIR` | `$TMPDIR/credfeto-build-mcp` | Where each job writes its full log (`<job id>.log`, mode 0600). |
 | `BUILD_MCP_BUILDTEST` | `buildtest` on `PATH` | The absolute path of the pre-commit `buildtest` script that the `buildtest` tool runs. |
@@ -72,7 +72,7 @@ Every parameter is an enum or a pattern-checked job id. No tool takes a free-for
 outside the enum is refused without anything being run.
 
 | Tool | Parameters | What it does |
-|------|------------|--------------|
+| ---- | ---------- | ------------ |
 | `detect` | none | The solution, its projects, the unit, integration and benchmark test projects, the timeout and any overrides error, detected afresh. |
 | `restore` | none | Starts `dotnet restore <solution>`. |
 | `build` | none | Starts `dotnet build <solution> -c Release` from the solution directory: the whole solution. |
