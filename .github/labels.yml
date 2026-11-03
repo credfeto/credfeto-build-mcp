@@ -44,6 +44,22 @@
   color: "d8bb50"
   description: "Configuration files changes"
 
+- name: "credfeto-build-core"
+  color: "96f7d2"
+  description: "Changes in Credfeto.Build.Core project"
+
+- name: "credfeto-build-core-tests"
+  color: "0e8a16"
+  description: "Changes in Credfeto.Build.Core.Tests project"
+
+- name: "credfeto-build-dotnet-server"
+  color: "96f7d2"
+  description: "Changes in Credfeto.Build.Dotnet.Server project"
+
+- name: "credfeto-build-dotnet-server-tests"
+  color: "0e8a16"
+  description: "Changes in Credfeto.Build.Dotnet.Server.Tests project"
+
 - name: "dependencies"
   color: "0366d6"
   description: "Updates to dependencies"

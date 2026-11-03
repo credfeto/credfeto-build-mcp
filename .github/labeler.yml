@@ -12,6 +12,14 @@
   - any: ['CHANGELOG.md']
 "Config Change":
   - any: ['src/**/*.json', '!src/global.json']
+"credfeto-build-core":
+  - any: ['src/Credfeto.Build.Core/**/*']
+"credfeto-build-core-tests":
+  - any: ['src/Credfeto.Build.Core.Tests/**/*']
+"credfeto-build-dotnet-server":
+  - any: ['src/Credfeto.Build.Dotnet.Server/**/*']
+"credfeto-build-dotnet-server-tests":
+  - any: ['src/Credfeto.Build.Dotnet.Server.Tests/**/*']
 "dotnet":
   - any: ['src/**/*.csproj']
 "Editorconfig":
