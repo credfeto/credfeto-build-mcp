@@ -12,9 +12,6 @@ using Credfeto.Build.Core.Jobs.Exceptions;
 
 namespace Credfeto.Build.Core.Jobs.Services;
 
-/// <summary>
-///     Runs one job at a time in the background, so no MCP call waits on a build; callers poll by job id.
-/// </summary>
 public sealed class JobRunner : IJobRunner, IAsyncDisposable
 {
     private static readonly TimeSpan ShutdownWait = TimeSpan.FromSeconds(30);
@@ -161,7 +158,7 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
             bool failed = await this.RunStepsAsync(job);
             await CollectCoverageAsync(job: job, cancellationToken: job.Cancellation.Token);
             await CollectChangedFilesAsync(job: job, cancellationToken: job.Cancellation.Token);
-            job.Finish(state: failed ? JobState.Failed : JobState.Succeeded, message: null);
+            await job.FinishAsync(state: failed ? JobState.Failed : JobState.Succeeded, message: null);
         }
         catch (OperationCanceledException) when (job.Cancellation.IsCancellationRequested)
         {
@@ -170,12 +167,15 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         catch (Exception exception) when (exception is Win32Exception or IOException or InvalidOperationException)
         {
             await job.Capture.WriteHeaderAsync("[job failed to run: " + exception.Message + "]");
-            job.Finish(state: JobState.Failed, message: "A process could not be started: " + exception.Message);
+            await job.FinishAsync(
+                state: JobState.Failed,
+                message: "A process could not be started: " + exception.Message
+            );
         }
         finally
         {
             // Anything unexpected still ends the job, so it can never block the next one
-            job.Finish(state: JobState.Failed, message: "The job ended unexpectedly");
+            await job.FinishAsync(state: JobState.Failed, message: "The job ended unexpectedly");
         }
     }
 
@@ -185,13 +185,16 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         {
             string minutes = job.Definition.Timeout.TotalMinutes.ToString(provider: CultureInfo.InvariantCulture);
             await job.Capture.WriteHeaderAsync("[job timed out]");
-            job.Finish(state: JobState.TimedOut, message: "The job exceeded its timeout of " + minutes + " minutes and was killed");
+            await job.FinishAsync(
+                state: JobState.TimedOut,
+                message: "The job exceeded its timeout of " + minutes + " minutes and was killed"
+            );
 
             return;
         }
 
         await job.Capture.WriteHeaderAsync("[job cancelled]");
-        job.Finish(state: JobState.Cancelled, message: "The server shut down while the job was running");
+        await job.FinishAsync(state: JobState.Cancelled, message: "The server shut down while the job was running");
     }
 
     private async ValueTask<bool> RunStepsAsync(RunningJob job)
@@ -219,7 +222,9 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
             double duration = Math.Round(value: this._timeProvider.GetElapsedTime(started).TotalSeconds, digits: 1);
 
             await job.Capture.WriteHeaderAsync("[exit code " + exitCode.ToString(CultureInfo.InvariantCulture) + "]");
-            job.CompleteStep(new(Name: step.Name, CommandLine: step.CommandLine, ExitCode: exitCode, DurationSeconds: duration));
+            job.CompleteStep(
+                new(Name: step.Name, CommandLine: step.CommandLine, ExitCode: exitCode, DurationSeconds: duration)
+            );
             failed |= exitCode != 0;
         }
 
