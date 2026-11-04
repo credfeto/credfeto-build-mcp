@@ -12,6 +12,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 ### Fixed
+- git commands (and the test helper) no longer inherit the repository-locating `GIT_*` variables git sets for hooks, so the test suite run from a worktree's pre-commit hook no longer commits into, branches or reconfigures the real repository
 ### Changed
 ### Deprecated
 ### Removed

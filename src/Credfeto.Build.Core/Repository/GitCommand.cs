@@ -7,17 +7,31 @@ using System.Threading.Tasks;
 
 namespace Credfeto.Build.Core.Repository;
 
-/// <summary>
-///     Runs a short read-only git query with a fixed argument vector (never a shell) and returns its output.
-/// </summary>
 public static class GitCommand
 {
     public const string GIT = "git";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
 
-    /// <summary>Returns git's standard output, or null when git could not run or exited with an error.</summary>
-    public static async ValueTask<string?> TryRunAsync(string repositoryRoot, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    // Variables git exports to hooks that point it at a specific repository; inherited by a child they would
+    // override the -C directory (e.g. tests run from a worktree's pre-commit hook acting on the real repository).
+    private static readonly string[] RepositoryLocatingVariables =
+    [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_NAMESPACE",
+        "GIT_PREFIX",
+    ];
+
+    public static async ValueTask<string?> TryRunAsync(
+        string repositoryRoot,
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken
+    )
     {
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(Timeout);
@@ -29,7 +43,10 @@ public static class GitCommand
             return null;
         }
 
-        using Process process = new() { StartInfo = CreateStartInfo(git: git, repositoryRoot: repositoryRoot, arguments: arguments) };
+        using Process process = new()
+        {
+            StartInfo = CreateStartInfo(git: git, repositoryRoot: repositoryRoot, arguments: arguments),
+        };
 
         try
         {
@@ -64,7 +81,6 @@ public static class GitCommand
         }
     }
 
-    /// <summary>Splits NUL-separated output (from a <c>-z</c> option) into its non-empty entries.</summary>
     public static IReadOnlyList<string> SplitNul(string? output)
     {
         return output is null ? [] : output.Split(separator: '\0', options: StringSplitOptions.RemoveEmptyEntries);
@@ -88,6 +104,11 @@ public static class GitCommand
         foreach (string argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
+        }
+
+        foreach (string variable in RepositoryLocatingVariables)
+        {
+            _ = startInfo.Environment.Remove(variable);
         }
 
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
