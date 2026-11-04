@@ -122,18 +122,17 @@ internal sealed class RunningJob : IAsyncDisposable
         }
     }
 
-    public void Finish(JobState state, string? message)
+    public async ValueTask FinishAsync(JobState state, string? message)
     {
-        lock (this._lock)
+        try
         {
-            if (this._state != JobState.Running)
-            {
-                return;
-            }
-
-            this._state = state;
-            this._message = message;
-            this._finished = this._timeProvider.GetTimestamp();
+            // Closed before the job reads as finished, so whoever sees it finish finds the whole log and no handle on it
+            await this.Capture.CloseAsync();
+        }
+        finally
+        {
+            // Even a log that fails to close still ends the job, so it can never block the next one
+            this.RecordEnd(state: state, message: message);
         }
     }
 
@@ -202,5 +201,20 @@ internal sealed class RunningJob : IAsyncDisposable
             : this._timeProvider.GetElapsedTime(this._started);
 
         return Math.Round(value: elapsed.TotalSeconds, digits: 1);
+    }
+
+    private void RecordEnd(JobState state, string? message)
+    {
+        lock (this._lock)
+        {
+            if (this._state != JobState.Running)
+            {
+                return;
+            }
+
+            this._state = state;
+            this._message = message;
+            this._finished = this._timeProvider.GetTimestamp();
+        }
     }
 }
