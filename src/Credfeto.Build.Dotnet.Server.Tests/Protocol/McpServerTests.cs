@@ -16,7 +16,6 @@ using Xunit;
 
 namespace Credfeto.Build.Dotnet.Server.Tests.Protocol;
 
-/// <summary>The whole server in process over a pipe: what a client sees from tools/list.</summary>
 public sealed class McpServerTests : TestBase
 {
     private static readonly string[] AllTools =
@@ -48,15 +47,48 @@ public sealed class McpServerTests : TestBase
     }
 
     [Fact]
-    public async Task TheToolListFollowsTheRepositoryWithListChangedAsync()
+    public Task TheToolListFollowsTheRepositoryWithListChangedAsync()
+    {
+        return this.FollowTheRepositoryAsync(
+            addDotnet: static (repository, token) =>
+                SampleRepository.WriteAsync(repository: repository, cancellationToken: token),
+            solutionRelative: "src/Example.slnx"
+        );
+    }
+
+    [Fact]
+    public Task TheToolListFollowsASlnSolutionWithListChangedAsync()
+    {
+        return this.FollowTheRepositoryAsync(
+            addDotnet: static (repository, token) =>
+                SampleRepository.WriteSlnAsync(repository: repository, cancellationToken: token),
+            solutionRelative: "src/Example.sln"
+        );
+    }
+
+    private async Task FollowTheRepositoryAsync(
+        Func<TemporaryDirectory, CancellationToken, ValueTask> addDotnet,
+        string solutionRelative
+    )
     {
         CancellationToken cancellationToken = this.CancellationToken();
         using TemporaryDirectory repository = new();
-        BuildServerEnvironment environment = new(RepositoryRoot: repository.Path, LogDirectory: repository.Combine("logs"));
-        DotnetDetection detection = await DotnetDetector.DetectAsync(repositoryRoot: repository.Path, cancellationToken: cancellationToken);
+        BuildServerEnvironment environment = new(
+            RepositoryRoot: repository.Path,
+            LogDirectory: repository.Combine("logs")
+        );
+        DotnetDetection detection = await DotnetDetector.DetectAsync(
+            repositoryRoot: repository.Path,
+            cancellationToken: cancellationToken
+        );
 
         await using ServiceProvider services = new ServiceCollection()
-            .AddDotnetServer(environment: environment, detection: detection, buildtest: TestContexts.NoBuildtest, debounce: TimeSpan.FromMilliseconds(100))
+            .AddDotnetServer(
+                environment: environment,
+                detection: detection,
+                buildtest: TestContexts.NoBuildtest,
+                debounce: TimeSpan.FromMilliseconds(100)
+            )
             .BuildServiceProvider();
 
         Pipe clientToServer = new();
@@ -69,9 +101,9 @@ public sealed class McpServerTests : TestBase
             NullLoggerFactory.Instance
         );
 
-        string solution = repository.Combine("src/Example.slnx");
+        string solution = repository.Combine(solutionRelative);
         Task client = WatchingClientAsync(
-            addDotnet: token => SampleRepository.WriteAsync(repository: repository, cancellationToken: token),
+            addDotnet: token => addDotnet(repository, token),
             solution: solution,
             clientToServer: clientToServer,
             serverToClient: serverToClient,
@@ -113,7 +145,11 @@ public sealed class McpServerTests : TestBase
         }
     }
 
-    private static async ValueTask WaitForToolsAsync(McpSession session, IReadOnlyList<string> expected, CancellationToken cancellationToken)
+    private static async ValueTask WaitForToolsAsync(
+        McpSession session,
+        IReadOnlyList<string> expected,
+        CancellationToken cancellationToken
+    )
     {
         // The change may land in more than one refresh; each one is announced, so wait until the list matches
         while (true)
@@ -132,19 +168,78 @@ public sealed class McpServerTests : TestBase
     public async Task RepositoryWithoutDotnetAdvertisesNoToolsAsync()
     {
         using TemporaryDirectory repository = new();
-        _ = await repository.WriteAsync(relative: "package.json", content: "{}", cancellationToken: this.CancellationToken());
+        _ = await repository.WriteAsync(
+            relative: "package.json",
+            content: "{}",
+            cancellationToken: this.CancellationToken()
+        );
 
         McpProbeResult result = await this.ProbeAsync(repository);
 
         Assert.Empty(result.ToolNames);
-        Assert.Contains(expectedSubstring: "no tools", actualString: result.Instructions, comparisonType: StringComparison.Ordinal);
+        Assert.Contains(
+            expectedSubstring: "no tools",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task RepositoryWithoutDotnetInstructionsDoNotDescribeASolutionAsync()
+    {
+        using TemporaryDirectory repository = new();
+        _ = await repository.WriteAsync(
+            relative: "build.sh",
+            content: "#!/bin/sh\n",
+            cancellationToken: this.CancellationToken()
+        );
+
+        McpProbeResult result = await this.ProbeAsync(repository);
+
+        Assert.DoesNotContain(
+            expectedSubstring: "for the .NET solution in",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
+        Assert.Contains(
+            expectedSubstring: "No .NET solution was found",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task RepositoryWithOnlyALoneProjectAdvertisesNoToolsAsync()
+    {
+        // A project without a solution is not a .NET repository for this server (decided on issue #3)
+        using TemporaryDirectory repository = new();
+        _ = await repository.WriteAsync(
+            relative: "src/Example.Core/Example.Core.csproj",
+            content: "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>",
+            cancellationToken: this.CancellationToken()
+        );
+
+        McpProbeResult result = await this.ProbeAsync(repository);
+
+        Assert.Empty(result.ToolNames);
+        Assert.Contains(
+            expectedSubstring: "no tools",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
     }
 
     private async ValueTask<McpProbeResult> ProbeAsync(TemporaryDirectory repository)
     {
         CancellationToken cancellationToken = this.CancellationToken();
-        BuildServerEnvironment environment = new(RepositoryRoot: repository.Path, LogDirectory: repository.Combine("logs"));
-        DotnetDetection detection = await DotnetDetector.DetectAsync(repositoryRoot: repository.Path, cancellationToken: cancellationToken);
+        BuildServerEnvironment environment = new(
+            RepositoryRoot: repository.Path,
+            LogDirectory: repository.Combine("logs")
+        );
+        DotnetDetection detection = await DotnetDetector.DetectAsync(
+            repositoryRoot: repository.Path,
+            cancellationToken: cancellationToken
+        );
 
         await using ServiceProvider services = new ServiceCollection()
             .AddDotnetServer(environment: environment, detection: detection)
@@ -160,21 +255,33 @@ public sealed class McpServerTests : TestBase
             NullLoggerFactory.Instance
         );
 
-        Task<McpProbeResult> client = ClientAsync(clientToServer: clientToServer, serverToClient: serverToClient, cancellationToken: cancellationToken);
+        Task<McpProbeResult> client = ClientAsync(
+            clientToServer: clientToServer,
+            serverToClient: serverToClient,
+            cancellationToken: cancellationToken
+        );
 
         await ServerRunner.RunAsync(services: services, transport: transport, cancellationToken: cancellationToken);
 
         return await client;
     }
 
-    private static async Task<McpProbeResult> ClientAsync(Pipe clientToServer, Pipe serverToClient, CancellationToken cancellationToken)
+    private static async Task<McpProbeResult> ClientAsync(
+        Pipe clientToServer,
+        Pipe serverToClient,
+        CancellationToken cancellationToken
+    )
     {
         await using Stream toServer = clientToServer.Writer.AsStream();
         using StreamReader fromServer = new(serverToClient.Reader.AsStream());
 
         try
         {
-            return await McpProbe.ListToolsAsync(toServer: toServer, fromServer: fromServer, cancellationToken: cancellationToken);
+            return await McpProbe.ListToolsAsync(
+                toServer: toServer,
+                fromServer: fromServer,
+                cancellationToken: cancellationToken
+            );
         }
         finally
         {
