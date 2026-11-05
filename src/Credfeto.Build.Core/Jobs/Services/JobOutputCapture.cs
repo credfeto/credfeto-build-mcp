@@ -8,9 +8,6 @@ using System.Threading.Tasks;
 
 namespace Credfeto.Build.Core.Jobs.Services;
 
-/// <summary>
-///     Writes masked, length-capped output to the job's log file and keeps the last lines in memory.
-/// </summary>
 internal sealed partial class JobOutputCapture : IAsyncDisposable
 {
     private const string TRUNCATED_LINE = " [line truncated]";
@@ -23,6 +20,8 @@ internal sealed partial class JobOutputCapture : IAsyncDisposable
     private readonly Queue<string> _tail;
     private readonly Lock _tailLock = new();
     private readonly StreamWriter _writer;
+    private bool _closed;
+    private int _closeRequested;
     private bool _truncated;
     private long _written;
 
@@ -37,18 +36,29 @@ internal sealed partial class JobOutputCapture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // Both steps are safe to repeat, so disposing twice (or after the job closed the log) does nothing more
+        await this.CloseAsync();
+        this._fileLock.Dispose();
+    }
+
+    public async ValueTask CloseAsync()
+    {
+        if (Interlocked.Exchange(location1: ref this._closeRequested, value: 1) != 0)
+        {
+            return;
+        }
+
         await this._fileLock.WaitAsync(CancellationToken.None);
 
         try
         {
+            this._closed = true;
             await this._writer.DisposeAsync();
         }
         finally
         {
             this._fileLock.Release();
         }
-
-        this._fileLock.Dispose();
     }
 
     public ValueTask WriteHeaderAsync(string text)
@@ -117,7 +127,7 @@ internal sealed partial class JobOutputCapture : IAsyncDisposable
 
     private async ValueTask AppendToLogAsync(string line)
     {
-        if (this._truncated)
+        if (this._closed || this._truncated)
         {
             return;
         }
@@ -153,6 +163,10 @@ internal sealed partial class JobOutputCapture : IAsyncDisposable
         return new(path: logPath, options: options);
     }
 
-    [GeneratedRegex(pattern: @"\x1B\[[0-9;?]*[ -/]*[@-~]", options: RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(
+        pattern: @"\x1B\[[0-9;?]*[ -/]*[@-~]",
+        options: RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 1000
+    )]
     private static partial Regex AnsiEscape();
 }
