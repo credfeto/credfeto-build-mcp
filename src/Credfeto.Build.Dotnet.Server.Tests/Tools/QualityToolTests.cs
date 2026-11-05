@@ -58,7 +58,7 @@ public sealed class QualityToolTests : TestBase, IDisposable
     {
         _ = await this._repository.WriteAsync(relative: "CHANGELOG.md", content: "# Changelog\n", cancellationToken: this.CancellationToken());
 
-        CallToolResult result = await this.CallAsync(name: tool, arguments: []);
+        CallToolResult result = await this.CallAsync(name: tool, arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: tool + " ran without a manifest");
         Assert.Contains(expectedSubstring: "no .NET tool manifest", actualString: Text(result), comparisonType: StringComparison.Ordinal);
@@ -71,7 +71,7 @@ public sealed class QualityToolTests : TestBase, IDisposable
         await this.WriteManifestAsync("dotnet-tools.json");
         string changelog = await this._repository.WriteAsync(relative: "CHANGELOG.md", content: "# Changelog\n", cancellationToken: this.CancellationToken());
 
-        CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         JobDefinition definition = Assert.Single(this._runner.Started);
@@ -85,7 +85,7 @@ public sealed class QualityToolTests : TestBase, IDisposable
     {
         await this.WriteManifestAsync(".config/dotnet-tools.json");
 
-        CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: "linted a missing changelog");
         Assert.Contains(expectedSubstring: "CHANGELOG.md", actualString: Text(result), comparisonType: StringComparison.Ordinal);
@@ -99,7 +99,7 @@ public sealed class QualityToolTests : TestBase, IDisposable
         Executable.Mark(script);
         BuildtestLocator locator = new(name => StringComparer.Ordinal.Equals(x: name, y: BuildtestLocator.VARIABLE) ? script : null);
 
-        CallToolResult result = await this.CallAsync(name: "buildtest", arguments: [], buildtest: locator);
+        CallToolResult result = await this.CallAsync(name: "buildtest", arguments: [with(StringComparer.Ordinal)], buildtest: locator);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         ProcessStep step = Assert.Single(Assert.Single(this._runner.Started).Steps);
@@ -111,7 +111,7 @@ public sealed class QualityToolTests : TestBase, IDisposable
     [Fact]
     public async Task BuildtestWithoutTheScriptFailsClearlyAsync()
     {
-        CallToolResult result = await this.CallAsync(name: "buildtest", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "buildtest", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: "ran a missing script");
         Assert.Contains(expectedSubstring: BuildtestLocator.VARIABLE, actualString: Text(result), comparisonType: StringComparison.Ordinal);
@@ -128,7 +128,7 @@ public sealed class QualityToolTests : TestBase, IDisposable
         await TestGit.CommitAllAsync(repository: this._repository.Path, message: "base", cancellationToken: cancellationToken);
         string changed = await this._repository.WriteAsync(relative: "src/New.cs", content: "class New{}\n", cancellationToken: cancellationToken);
 
-        CallToolResult result = await this.CallAsync(name: "cleanup", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "cleanup", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         JobDefinition definition = Assert.Single(this._runner.Started);
@@ -151,7 +151,7 @@ public sealed class QualityToolTests : TestBase, IDisposable
         _ = await this._repository.WriteAsync(relative: "src/Old.cs", content: "class Old {}\n", cancellationToken: cancellationToken);
         await TestGit.CommitAllAsync(repository: this._repository.Path, message: "base", cancellationToken: cancellationToken);
 
-        CallToolResult result = await this.CallAsync(name: "cleanup", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "cleanup", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: Text(result));
         Assert.Contains(expectedSubstring: "nothing to clean up", actualString: Text(result), comparisonType: StringComparison.Ordinal);

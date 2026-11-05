@@ -48,7 +48,7 @@ public static class CoberturaParser
 
     private static async ValueTask<CoberturaReport> ReadAsync(XmlReader reader, CancellationToken cancellationToken)
     {
-        Dictionary<string, Dictionary<SourceLine, bool>> packages = new(StringComparer.Ordinal);
+        Dictionary<string, Dictionary<SourceLine, bool>> packages = [with(StringComparer.Ordinal)];
         bool sawRoot = false;
         Dictionary<SourceLine, bool>? currentPackage = null;
         string currentFile = string.Empty;

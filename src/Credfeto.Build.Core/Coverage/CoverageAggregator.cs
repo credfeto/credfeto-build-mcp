@@ -10,7 +10,7 @@ public static class CoverageAggregator
 
     public static CoverageSummary Combine(IEnumerable<CoberturaReport> reports)
     {
-        Dictionary<string, Dictionary<SourceLine, bool>> merged = new(StringComparer.Ordinal);
+        Dictionary<string, Dictionary<SourceLine, bool>> merged = [with(StringComparer.Ordinal)];
 
         foreach (CoberturaPackage package in reports.SelectMany(static report => report.Packages))
         {

@@ -9,8 +9,8 @@ namespace Credfeto.Build.Core.Tests.Helpers;
 /// <summary>A fake process: each step prints its scripted lines and exits with its scripted code.</summary>
 internal sealed class ScriptedProcessLauncher : IProcessLauncher
 {
-    private readonly Dictionary<string, (IReadOnlyList<string> Lines, int ExitCode)> _script = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _hanging = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (IReadOnlyList<string> Lines, int ExitCode)> _script = [with(StringComparer.Ordinal)];
+    private readonly HashSet<string> _hanging = [with(StringComparer.Ordinal)];
     private readonly List<ProcessStep> _started = [];
     private readonly TaskCompletionSource _hangStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

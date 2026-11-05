@@ -49,7 +49,7 @@ public sealed class FileContentProbe : IChangedFilesProbe
 
     private static async ValueTask<IReadOnlyDictionary<string, string?>> HashAllAsync(IReadOnlyList<string> files, CancellationToken cancellationToken)
     {
-        Dictionary<string, string?> hashes = new(StringComparer.Ordinal);
+        Dictionary<string, string?> hashes = [with(StringComparer.Ordinal)];
 
         foreach (string file in files)
         {

@@ -35,7 +35,7 @@ public sealed class ToolCallTests : TestBase, IDisposable
             cancellationToken: this.CancellationToken()
         );
 
-        CallToolResult result = await this.CallAsync(name: "coverage", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "coverage", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         Assert.Contains(expectedSubstring: JOB_ID, actualString: Text(result), comparisonType: StringComparison.Ordinal);
@@ -87,7 +87,7 @@ public sealed class ToolCallTests : TestBase, IDisposable
     [Fact]
     public async Task TestWithNoArgumentsIsOneSolutionWideRunAsync()
     {
-        CallToolResult result = await this.CallAsync(name: "test", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "test", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         ProcessStep step = Assert.Single(Assert.Single(this._runner.Started).Steps);
@@ -98,7 +98,7 @@ public sealed class ToolCallTests : TestBase, IDisposable
     [Fact]
     public async Task BuildIsTheWholeSolutionAsync()
     {
-        CallToolResult result = await this.CallAsync(name: "build", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "build", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         ProcessStep step = Assert.Single(Assert.Single(this._runner.Started).Steps);
@@ -140,7 +140,7 @@ public sealed class ToolCallTests : TestBase, IDisposable
     {
         this._runner.Busy = true;
 
-        CallToolResult result = await this.CallAsync(name: "build", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "build", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: "busy is an error");
         Assert.Contains(expectedSubstring: "still running", actualString: Text(result), comparisonType: StringComparison.Ordinal);
@@ -170,7 +170,7 @@ public sealed class ToolCallTests : TestBase, IDisposable
     [Fact]
     public async Task DetectListsTheSolutionAndTestProjectsAsync()
     {
-        CallToolResult result = await this.CallAsync(name: "detect", arguments: []);
+        CallToolResult result = await this.CallAsync(name: "detect", arguments: [with(StringComparer.Ordinal)]);
 
         using JsonDocument document = JsonDocument.Parse(Text(result));
         Assert.Equal(expected: "src/Example.slnx", actual: document.RootElement.GetProperty("solution").GetString());
