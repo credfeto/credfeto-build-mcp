@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 
 namespace Credfeto.Build.Dotnet.Server.Tests.Helpers;
 
-/// <summary>Writes a small .NET repository layout: a solution under src/ and one project of each kind.</summary>
 internal static class SampleRepository
 {
     public const string SLNX = """
@@ -24,6 +23,14 @@ internal static class SampleRepository
         </Solution>
         """;
 
+    public const string SLN = """
+        Microsoft Visual Studio Solution File, Format Version 12.00
+        Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Example.Core", "Example.Core\Example.Core.csproj", "{11111111-1111-1111-1111-111111111111}"
+        EndProject
+        Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Example.Core.Tests", "Example.Core.Tests\Example.Core.Tests.csproj", "{22222222-2222-2222-2222-222222222222}"
+        EndProject
+        """;
+
     private const string PROJECT = "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>";
 
     private const string SUPPORT_PROJECT = """
@@ -34,10 +41,17 @@ internal static class SampleRepository
         </Project>
         """;
 
-    /// <summary>Adds a project to the solution and writes its project file, as dotnet new and dotnet sln add would.</summary>
-    public static async ValueTask AddProjectAsync(TemporaryDirectory repository, string name, CancellationToken cancellationToken)
+    public static async ValueTask AddProjectAsync(
+        TemporaryDirectory repository,
+        string name,
+        CancellationToken cancellationToken
+    )
     {
-        _ = await repository.WriteAsync(relative: "src/" + name + "/" + name + ".csproj", content: PROJECT, cancellationToken: cancellationToken);
+        _ = await repository.WriteAsync(
+            relative: "src/" + name + "/" + name + ".csproj",
+            content: PROJECT,
+            cancellationToken: cancellationToken
+        );
 
         string solution = repository.Combine("src/Example.slnx");
         string content = await File.ReadAllTextAsync(path: solution, cancellationToken: cancellationToken);
@@ -52,13 +66,49 @@ internal static class SampleRepository
         );
     }
 
+    public static async ValueTask WriteSlnAsync(TemporaryDirectory repository, CancellationToken cancellationToken)
+    {
+        foreach (string name in new[] { "Example.Core", "Example.Core.Tests" })
+        {
+            _ = await repository.WriteAsync(
+                relative: "src/" + name + "/" + name + ".csproj",
+                content: PROJECT,
+                cancellationToken: cancellationToken
+            );
+        }
+
+        _ = await repository.WriteAsync(
+            relative: "src/Example.sln",
+            content: SLN,
+            cancellationToken: cancellationToken
+        );
+    }
+
     public static async ValueTask WriteAsync(TemporaryDirectory repository, CancellationToken cancellationToken)
     {
-        _ = await repository.WriteAsync(relative: "src/Example.slnx", content: SLNX, cancellationToken: cancellationToken);
+        _ = await repository.WriteAsync(
+            relative: "src/Example.slnx",
+            content: SLNX,
+            cancellationToken: cancellationToken
+        );
 
-        foreach (string name in new[] { "Example.Core", "Example.Core.Tests", "Example.Api.Tests", "Example.Integration.Tests", "Example.Benchmark.Tests", "Example.Tests.Support" })
+        foreach (
+            string name in new[]
+            {
+                "Example.Core",
+                "Example.Core.Tests",
+                "Example.Api.Tests",
+                "Example.Integration.Tests",
+                "Example.Benchmark.Tests",
+                "Example.Tests.Support",
+            }
+        )
         {
-            _ = await repository.WriteAsync(relative: "src/" + name + "/" + name + ".csproj", content: PROJECT, cancellationToken: cancellationToken);
+            _ = await repository.WriteAsync(
+                relative: "src/" + name + "/" + name + ".csproj",
+                content: PROJECT,
+                cancellationToken: cancellationToken
+            );
         }
 
         _ = await repository.WriteAsync(
