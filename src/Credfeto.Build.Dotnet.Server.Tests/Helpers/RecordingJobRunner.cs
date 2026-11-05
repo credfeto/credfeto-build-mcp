@@ -13,7 +13,7 @@ internal sealed class RecordingJobRunner : IJobRunner
     public const string JOB_ID = "0123456789abcdef0123456789abcdef";
 
     private readonly List<JobDefinition> _started = [];
-    private readonly Dictionary<string, JobStatus> _statuses = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, JobStatus> _statuses = [with(StringComparer.Ordinal)];
 
     public IReadOnlyList<JobDefinition> Started => this._started;
 

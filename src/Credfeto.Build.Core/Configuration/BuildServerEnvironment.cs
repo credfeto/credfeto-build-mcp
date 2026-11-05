@@ -35,7 +35,7 @@ public sealed record BuildServerEnvironment(string RepositoryRoot, string LogDir
 
     public static IReadOnlyDictionary<string, string> SnapshotVariables()
     {
-        Dictionary<string, string> variables = new(StringComparer.Ordinal);
+        Dictionary<string, string> variables = [with(StringComparer.Ordinal)];
 
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
         {

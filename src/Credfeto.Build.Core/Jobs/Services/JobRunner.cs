@@ -16,7 +16,7 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
 {
     private static readonly TimeSpan ShutdownWait = TimeSpan.FromSeconds(30);
 
-    private readonly Dictionary<string, RunningJob> _jobs = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RunningJob> _jobs = [with(StringComparer.Ordinal)];
     private readonly IProcessLauncher _launcher;
     private readonly Lock _lock = new();
     private readonly IOutputMasker _masker;

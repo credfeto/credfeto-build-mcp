@@ -19,7 +19,7 @@ public sealed partial class ToolArguments
 
     public ToolArguments(IEnumerable<KeyValuePair<string, JsonElement>>? arguments, IReadOnlyList<SchemaProperty> schema)
     {
-        this._values = new(StringComparer.Ordinal);
+        this._values = [with(StringComparer.Ordinal)];
 
         foreach ((string name, JsonElement value) in arguments ?? [])
         {
