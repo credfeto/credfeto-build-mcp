@@ -200,11 +200,12 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
     private async ValueTask<bool> RunStepsAsync(RunningJob job)
     {
         bool failed = false;
+        bool stopped = false;
         CancellationToken cancellationToken = job.Cancellation.Token;
 
         for (int index = 0; index < job.Definition.Steps.Count; index++)
         {
-            if (failed && !job.Definition.ContinueOnFailure)
+            if (stopped)
             {
                 break;
             }
@@ -225,7 +226,12 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
             job.CompleteStep(
                 new(Name: step.Name, CommandLine: step.CommandLine, ExitCode: exitCode, DurationSeconds: duration)
             );
-            failed |= exitCode != 0;
+            bool stepFailed = exitCode != 0;
+            failed |= stepFailed;
+
+            // A failed prerequisite (restore, build) ends even a job that continues on failure, so a later
+            // step never runs against stale outputs
+            stopped = stepFailed && (step.StopJobOnFailure || !job.Definition.ContinueOnFailure);
         }
 
         return failed;

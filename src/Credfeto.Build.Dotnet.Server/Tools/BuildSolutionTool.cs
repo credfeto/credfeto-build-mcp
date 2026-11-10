@@ -13,7 +13,7 @@ public sealed class BuildSolutionTool : BuildTool
         : base(
             name: ToolNames.BUILD,
             title: "Build (Release)",
-            description: "Starts a job that builds the whole solution: dotnet build <solution> -c Release from the solution directory. Returns the job id at once; poll job_status, then read job_result",
+            description: "Starts a job that restores, then builds the whole solution as pre-commit buildtest does: dotnet build <solution> -c Release --no-restore with buildtest's -p: properties and -nodeReuse:False, from the solution directory. Returns the job id at once; poll job_status, then read job_result",
             schema: [],
             readOnly: false
         )
@@ -21,7 +21,10 @@ public sealed class BuildSolutionTool : BuildTool
         this._context = context;
     }
 
-    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        CancellationToken cancellationToken
+    )
     {
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
 
@@ -29,7 +32,7 @@ public sealed class BuildSolutionTool : BuildTool
             runner: this._context.Runner,
             repository: repository,
             kind: ToolNames.BUILD,
-            steps: [DotnetCommands.Build(repository)],
+            steps: [DotnetCommands.Restore(repository), DotnetCommands.Build(repository)],
             testParser: null,
             coverageFiles: [],
             changedFiles: null,
