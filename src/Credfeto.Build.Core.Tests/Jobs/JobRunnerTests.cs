@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
@@ -96,6 +97,44 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         StepResult step = Assert.Single(result.Steps);
         Assert.Equal(expected: 1, actual: step.ExitCode);
         await AssertLogClosedAsync(result.LogPath);
+    }
+
+    [Fact]
+    public async Task FailedStepDoesNotStopAJobThatContinuesOnFailureAsync()
+    {
+        this._launcher.Prints(step: "a", exitCode: 1);
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            Definition(continueOnFailure: true, parser: null, "a", "b")
+        );
+
+        Assert.Equal(expected: JobState.Failed, actual: result.State);
+        Assert.Equal(expected: 2, actual: result.Steps.Count);
+    }
+
+    [Fact]
+    public async Task FailedStopJobOnFailureStepStopsAJobThatContinuesOnFailureAsync()
+    {
+        this._launcher.Prints(step: "a", exitCode: 1);
+
+        JobDefinition definition = Definition(continueOnFailure: true, parser: null, "a", "b");
+        definition = definition with
+        {
+            Steps = [definition.Steps[0] with { StopJobOnFailure = true }, definition.Steps[1]],
+        };
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(runner: runner, definition: definition);
+
+        Assert.Equal(expected: JobState.Failed, actual: result.State);
+        Assert.Equal(expected: "a", actual: Assert.Single(result.Steps).Name);
+        Assert.Equal(
+            expected: ["a"],
+            actual: this._launcher.Started.Select(static step => step.Name),
+            comparer: StringComparer.Ordinal
+        );
     }
 
     [Fact]

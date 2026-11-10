@@ -28,8 +28,9 @@ to a `.sln`. It reads the solution's C# projects and sorts them by name:
 
 - `*.Tests` are unit test projects, unless the project sets `IsTestProject` or `IsTestingPlatformApplication` to
   `false`;
-- `*.Integration.Tests` and `*.Benchmark.Tests` are listed, but are never offered as a `project` to `test` or
-  `coverage`. Only the solution-wide `test` run (scope `all`) includes them.
+- `*.Integration.Tests` and `*.Benchmark.Tests` are listed and can be run by name with `test` scope `project`. The
+  solution-wide `test` run (scope `all`) leaves their namespaces out, as pre-commit `buildtest` does, and `coverage`
+  never offers them.
 
 If no solution is found, the server **registers no tools**: `tools/list` returns an empty list and the server's
 instructions say why. A repository with a solution but no unit test projects gets every tool except `test` and
@@ -71,12 +72,16 @@ so the agent never composes a `cd`.
 Every parameter is an enum or a pattern-checked job id. No tool takes a free-form argument string, and a value
 outside the enum is refused without anything being run.
 
+The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerateSuppressionFile=true`,
+`-p:ContinuousIntegrationBuild=true`, `-p:IsProduction=false`, `-p:Optimize=true`,
+`-p:SuppressNETCoreSdkPreviewMessage=true` and `-p:Version=0.0.0.1-test`.
+
 | Tool | Parameters | What it does |
 | --- | --- | --- |
 | `detect` | none | The solution, its projects, the unit, integration and benchmark test projects, the timeout and any overrides error, detected afresh. |
 | `restore` | none | Starts `dotnet restore <solution>`. |
-| `build` | none | Starts `dotnet build <solution> -c Release` from the solution directory: the whole solution. |
-| `test` | `scope`: `all` (default) or `project`; `project`: one of the unit test projects | `all` starts one solution-wide run, `dotnet test --solution <solution> -c Release` from the solution directory, which includes integration tests as CI does. `project` starts `dotnet test <Project>/<Project>.csproj -c Release -p:SolutionDir=<src>/` for that project only. |
+| `build` | none | Starts `dotnet restore <solution>`, then `dotnet build <solution> -c Release --no-restore <buildtest properties> -nodeReuse:False` from the solution directory: the whole solution. |
+| `test` | `scope`: `all` (default) or `project`; `project`: one of the unit, integration or benchmark test projects | Runs the tests as pre-commit `buildtest` does: restore, build, then test with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8` and the `buildtest` properties. `all` builds the solution, then starts one `dotnet test --solution <solution>` run from the solution directory with `--filter-not-namespace` for `*.Integration.Tests`, `*.Integration.Tests.*`, `*.Benchmark.Tests` and `*.Benchmark.Tests.*`. `project` builds that project, then runs `dotnet test <Project>/<Project>.csproj ... -p:SolutionDir=<src>/` with no namespace filter. A failed restore or build ends the job, so the tests never run against stale binaries. |
 | `coverage` | `project`: `all` (default) or one of the unit test projects | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. |
 | `buildcheck` | `mode`: `pre_release` (default) or `release` | Starts `dotnet tool restore`, then `dotnet buildcheck -Solution <absolute solution> -WarningAsErrors true -PreReleaseBuild <true\|false>`. |
 | `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |

@@ -34,11 +34,19 @@ public sealed class DotnetWorkspaceTests : TestBase, IDisposable
         int changes = 0;
         workspace.Tools.Changed += (_, _) => Interlocked.Increment(ref changes);
 
-        await SampleRepository.AddProjectAsync(repository: this._repository, name: "Example.New.Tests", cancellationToken: this.CancellationToken());
+        await SampleRepository.AddProjectAsync(
+            repository: this._repository,
+            name: "Example.New.Tests",
+            cancellationToken: this.CancellationToken()
+        );
         _ = await workspace.RefreshAsync(this.CancellationToken());
 
         Assert.Equal(expected: 1, actual: changes);
-        Assert.Contains(expected: "Example.New.Tests", collection: ProjectEnum(workspace: workspace, tool: "test"), comparer: StringComparer.Ordinal);
+        Assert.Contains(
+            expected: "Example.New.Tests",
+            collection: ProjectEnum(workspace: workspace, tool: "test"),
+            comparer: StringComparer.Ordinal
+        );
     }
 
     [Fact]
@@ -62,7 +70,11 @@ public sealed class DotnetWorkspaceTests : TestBase, IDisposable
 
         await SampleRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
         _ = await workspace.RefreshAsync(this.CancellationToken());
-        Assert.Contains(expected: "buildtest", collection: workspace.Tools.PrimitiveNames, comparer: StringComparer.Ordinal);
+        Assert.Contains(
+            expected: "buildtest",
+            collection: workspace.Tools.PrimitiveNames,
+            comparer: StringComparer.Ordinal
+        );
 
         File.Delete(this._repository.Combine("src/Example.slnx"));
         _ = await workspace.RefreshAsync(this.CancellationToken());
@@ -77,11 +89,18 @@ public sealed class DotnetWorkspaceTests : TestBase, IDisposable
         BuildTool test = TestContexts.Find(tools: workspace.Tools, name: "test");
 
         // The client never re-reads the schema: it calls the tool it already has with the new project
-        await SampleRepository.AddProjectAsync(repository: this._repository, name: "Example.New.Tests", cancellationToken: this.CancellationToken());
-        CallToolResult result = await test.CallAsync(arguments: ProjectArguments("Example.New.Tests"), cancellationToken: this.CancellationToken());
+        await SampleRepository.AddProjectAsync(
+            repository: this._repository,
+            name: "Example.New.Tests",
+            cancellationToken: this.CancellationToken()
+        );
+        CallToolResult result = await test.CallAsync(
+            arguments: ProjectArguments("Example.New.Tests"),
+            cancellationToken: this.CancellationToken()
+        );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
-        Assert.Equal(expected: "test Example.New.Tests", actual: Assert.Single(Assert.Single(this._runner.Started).Steps).Name);
+        Assert.Equal(expected: "test Example.New.Tests", actual: Assert.Single(this._runner.Started).Steps[^1].Name);
     }
 
     [Fact]
@@ -93,9 +112,15 @@ public sealed class DotnetWorkspaceTests : TestBase, IDisposable
         BuildTool coverage = TestContexts.Find(tools: workspace.Tools, name: "coverage");
 
         Directory.Delete(path: this._repository.Combine("src/Example.Api.Tests"), recursive: true);
-        CallToolResult tested = await test.CallAsync(arguments: ProjectArguments("Example.Api.Tests"), cancellationToken: this.CancellationToken());
+        CallToolResult tested = await test.CallAsync(
+            arguments: ProjectArguments("Example.Api.Tests"),
+            cancellationToken: this.CancellationToken()
+        );
         CallToolResult measured = await coverage.CallAsync(
-            arguments: new Dictionary<string, JsonElement>(StringComparer.Ordinal) { ["project"] = String("Example.Api.Tests") },
+            arguments: new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            {
+                ["project"] = String("Example.Api.Tests"),
+            },
             cancellationToken: this.CancellationToken()
         );
 
@@ -115,13 +140,20 @@ public sealed class DotnetWorkspaceTests : TestBase, IDisposable
         CallToolResult result = await build.CallAsync(arguments: [], cancellationToken: this.CancellationToken());
 
         Assert.True(condition: result.IsError, userMessage: "built a missing solution");
-        Assert.Contains(expectedSubstring: "no .NET solution", actualString: Text(result), comparisonType: StringComparison.Ordinal);
+        Assert.Contains(
+            expectedSubstring: "no .NET solution",
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
         Assert.Empty(this._runner.Started);
     }
 
     private async ValueTask<DotnetWorkspace> CreateAsync()
     {
-        DotnetDetection detection = await DotnetDetector.DetectAsync(repositoryRoot: this._repository.Path, cancellationToken: this.CancellationToken());
+        DotnetDetection detection = await DotnetDetector.DetectAsync(
+            repositoryRoot: this._repository.Path,
+            cancellationToken: this.CancellationToken()
+        );
 
         return new(initial: detection, runner: this._runner, buildtest: TestContexts.NoBuildtest);
     }

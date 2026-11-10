@@ -29,13 +29,19 @@ internal static class TestRepositories
         Kind: DotnetProjectKind.IntegrationTests
     );
 
+    public static readonly DotnetProject BenchmarkTests = new(
+        Name: "Example.Benchmark.Tests",
+        RelativePath: "Example.Benchmark.Tests/Example.Benchmark.Tests.csproj",
+        Kind: DotnetProjectKind.BenchmarkTests
+    );
+
     public static DotnetRepository Create(string root, params DotnetProject[] unitTests)
     {
         return new(
             RepositoryRoot: root,
             SolutionPath: root + "/src/Example.slnx",
             SolutionDirectory: root + "/src",
-            Projects: [Core, IntegrationTests, .. unitTests],
+            Projects: [Core, IntegrationTests, BenchmarkTests, .. unitTests],
             UnitTestProjects: unitTests,
             Timeout: TimeSpan.FromMinutes(30)
         );
@@ -43,11 +49,21 @@ internal static class TestRepositories
 
     public static DotnetDetection Detected(DotnetRepository repository)
     {
-        return new(RepositoryRoot: repository.RepositoryRoot, Repository: repository, Reason: "Found src/Example.slnx", OverridesError: null);
+        return new(
+            RepositoryRoot: repository.RepositoryRoot,
+            Repository: repository,
+            Reason: "Found src/Example.slnx",
+            OverridesError: null
+        );
     }
 
     public static DotnetDetection NotDetected(string root)
     {
-        return new(RepositoryRoot: root, Repository: null, Reason: "No .slnx or .sln under src/ or the repository root", OverridesError: null);
+        return new(
+            RepositoryRoot: root,
+            Repository: null,
+            Reason: "No .slnx or .sln under src/ or the repository root",
+            OverridesError: null
+        );
     }
 }
