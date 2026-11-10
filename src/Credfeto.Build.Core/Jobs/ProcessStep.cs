@@ -3,9 +3,6 @@ using System.Diagnostics;
 
 namespace Credfeto.Build.Core.Jobs;
 
-/// <summary>
-///     One process to run: a fixed executable and argument vector, never a shell command line.
-/// </summary>
 [DebuggerDisplay("Name={Name}, FileName={FileName}, WorkingDirectory={WorkingDirectory}")]
 public sealed record ProcessStep(
     string Name,
@@ -15,6 +12,11 @@ public sealed record ProcessStep(
     IReadOnlyDictionary<string, string> Environment
 )
 {
+    // When set, a failure of this step ends the job even if the job continues on failure
+    public bool StopJobOnFailure { get; init; }
+
     public string CommandLine =>
-        this.Arguments.Count == 0 ? this.FileName : this.FileName + " " + string.Join(separator: ' ', values: this.Arguments);
+        this.Arguments.Count == 0
+            ? this.FileName
+            : this.FileName + " " + string.Join(separator: ' ', values: this.Arguments);
 }

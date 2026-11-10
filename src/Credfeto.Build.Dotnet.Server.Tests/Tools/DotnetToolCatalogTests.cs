@@ -15,7 +15,10 @@ public sealed class DotnetToolCatalogTests : TestBase
     [Fact]
     public static void NoDotnetMeansNoTools()
     {
-        IReadOnlyList<McpServerTool> tools = TestContexts.Tools(runner: new RecordingJobRunner(), detection: TestRepositories.NotDetected("/workspace/repo"));
+        IReadOnlyList<McpServerTool> tools = TestContexts.Tools(
+            runner: new RecordingJobRunner(),
+            detection: TestRepositories.NotDetected("/workspace/repo")
+        );
 
         Assert.Empty(tools);
     }
@@ -24,7 +27,20 @@ public sealed class DotnetToolCatalogTests : TestBase
     public static void DotnetRepositoryGetsEveryTool()
     {
         Assert.Equal(
-            expected: ["build", "buildcheck", "buildtest", "changelog_lint", "cleanup", "coverage", "detect", "job_result", "job_status", "restore", "test"],
+            expected:
+            [
+                "build",
+                "buildcheck",
+                "buildtest",
+                "changelog_lint",
+                "cleanup",
+                "coverage",
+                "detect",
+                "job_result",
+                "job_status",
+                "restore",
+                "test",
+            ],
             actual: Names(Create(TestRepositories.CoreTests, TestRepositories.ApiTests)),
             comparer: StringComparer.Ordinal
         );
@@ -34,20 +50,48 @@ public sealed class DotnetToolCatalogTests : TestBase
     public static void WithoutUnitTestProjectsThereIsNoTestOrCoverage()
     {
         Assert.Equal(
-            expected: ["build", "buildcheck", "buildtest", "changelog_lint", "cleanup", "detect", "job_result", "job_status", "restore"],
+            expected:
+            [
+                "build",
+                "buildcheck",
+                "buildtest",
+                "changelog_lint",
+                "cleanup",
+                "detect",
+                "job_result",
+                "job_status",
+                "restore",
+            ],
             actual: Names(Create()),
             comparer: StringComparer.Ordinal
         );
     }
 
     [Fact]
-    public static void TestTakesAScopeAndAnEnumOfUnitTestProjects()
+    public static void TestTakesAScopeAndAnEnumOfUnitIntegrationAndBenchmarkTestProjects()
     {
         JsonElement schema = Schema(tools: Create(TestRepositories.CoreTests, TestRepositories.ApiTests), name: "test");
 
-        Assert.Equal(expected: ["all", "project"], actual: Enum(schema: schema, property: "scope"), comparer: StringComparer.Ordinal);
-        Assert.Equal(expected: ["Example.Core.Tests", "Example.Api.Tests"], actual: Enum(schema: schema, property: "project"), comparer: StringComparer.Ordinal);
-        Assert.False(condition: schema.GetProperty("additionalProperties").GetBoolean(), userMessage: "no other parameters");
+        Assert.Equal(
+            expected: ["all", "project"],
+            actual: Enum(schema: schema, property: "scope"),
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected:
+            [
+                "Example.Core.Tests",
+                "Example.Api.Tests",
+                "Example.Integration.Tests",
+                "Example.Benchmark.Tests",
+            ],
+            actual: Enum(schema: schema, property: "project"),
+            comparer: StringComparer.Ordinal
+        );
+        Assert.False(
+            condition: schema.GetProperty("additionalProperties").GetBoolean(),
+            userMessage: "no other parameters"
+        );
     }
 
     [Fact]
@@ -55,7 +99,11 @@ public sealed class DotnetToolCatalogTests : TestBase
     {
         JsonElement schema = Schema(tools: Create(TestRepositories.CoreTests), name: "coverage");
 
-        Assert.Equal(expected: ["all", "Example.Core.Tests"], actual: Enum(schema: schema, property: "project"), comparer: StringComparer.Ordinal);
+        Assert.Equal(
+            expected: ["all", "Example.Core.Tests"],
+            actual: Enum(schema: schema, property: "project"),
+            comparer: StringComparer.Ordinal
+        );
     }
 
     [Fact]
@@ -65,10 +113,14 @@ public sealed class DotnetToolCatalogTests : TestBase
         {
             foreach (JsonProperty property in tool.ProtocolTool.InputSchema.GetProperty("properties").EnumerateObject())
             {
-                bool constrained = property.Value.TryGetProperty(propertyName: "enum", value: out _)
+                bool constrained =
+                    property.Value.TryGetProperty(propertyName: "enum", value: out _)
                     || property.Value.TryGetProperty(propertyName: "pattern", value: out _);
 
-                Assert.True(condition: constrained, userMessage: tool.ProtocolTool.Name + "." + property.Name + " is free-form");
+                Assert.True(
+                    condition: constrained,
+                    userMessage: tool.ProtocolTool.Name + "." + property.Name + " is free-form"
+                );
             }
         }
     }
@@ -78,8 +130,16 @@ public sealed class DotnetToolCatalogTests : TestBase
     {
         IReadOnlyList<McpServerTool> tools = Create(TestRepositories.CoreTests);
 
-        Assert.Equal(expected: ["pre_release", "release"], actual: Enum(schema: Schema(tools: tools, name: "buildcheck"), property: "mode"), comparer: StringComparer.Ordinal);
-        Assert.Equal(expected: ["changed", "all"], actual: Enum(schema: Schema(tools: tools, name: "cleanup"), property: "scope"), comparer: StringComparer.Ordinal);
+        Assert.Equal(
+            expected: ["pre_release", "release"],
+            actual: Enum(schema: Schema(tools: tools, name: "buildcheck"), property: "mode"),
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: ["changed", "all"],
+            actual: Enum(schema: Schema(tools: tools, name: "cleanup"), property: "scope"),
+            comparer: StringComparer.Ordinal
+        );
         Assert.Empty(Schema(tools: tools, name: "changelog_lint").GetProperty("properties").EnumerateObject());
         Assert.Empty(Schema(tools: tools, name: "buildtest").GetProperty("properties").EnumerateObject());
     }
@@ -94,12 +154,15 @@ public sealed class DotnetToolCatalogTests : TestBase
     [InlineData("buildtest", false)]
     public static void OnlyQueryToolsAreReadOnly(string name, bool readOnly)
     {
-        McpServerTool tool = Create(TestRepositories.CoreTests).Single(candidate => StringComparer.Ordinal.Equals(x: candidate.ProtocolTool.Name, y: name));
+        McpServerTool tool = Create(TestRepositories.CoreTests)
+            .Single(candidate => StringComparer.Ordinal.Equals(x: candidate.ProtocolTool.Name, y: name));
 
         Assert.Equal(expected: readOnly, actual: tool.ProtocolTool.Annotations?.ReadOnlyHint);
     }
 
-    private static IReadOnlyList<McpServerTool> Create(params Credfeto.Build.Dotnet.Server.Detection.DotnetProject[] unitTests)
+    private static IReadOnlyList<McpServerTool> Create(
+        params Credfeto.Build.Dotnet.Server.Detection.DotnetProject[] unitTests
+    )
     {
         return TestContexts.Tools(
             runner: new RecordingJobRunner(),
@@ -114,7 +177,9 @@ public sealed class DotnetToolCatalogTests : TestBase
 
     private static JsonElement Schema(IReadOnlyList<McpServerTool> tools, string name)
     {
-        return tools.Single(tool => StringComparer.Ordinal.Equals(x: tool.ProtocolTool.Name, y: name)).ProtocolTool.InputSchema;
+        return tools
+            .Single(tool => StringComparer.Ordinal.Equals(x: tool.ProtocolTool.Name, y: name))
+            .ProtocolTool.InputSchema;
     }
 
     private static IEnumerable<string> Enum(JsonElement schema, string property)
