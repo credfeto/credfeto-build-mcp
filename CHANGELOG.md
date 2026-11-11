@@ -13,6 +13,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Added
 ### Fixed
 - .NET server: `test` with scope `all` (the default) now leaves out the `*.Integration.Tests` and `*.Benchmark.Tests` namespaces with `--filter-not-namespace`, as pre-commit `buildtest` does, so benchmark failures CI never sees no longer fail the run. Integration and benchmark test projects can be run by name with scope `project` (#13)
+- The default job log folder is now per-user ($XDG_STATE_HOME/credfeto-build-mcp/logs, else ~/.local/state/credfeto-build-mcp/logs) and created owner-only (0700) instead of a shared temp folder (#17)
 ### Changed
 - .NET server: `build` and `test` use pre-commit `buildtest`'s settings from one shared list: restore first, then build with `--no-restore`, the `buildtest` `-p:` properties and `-nodeReuse:False`; `test` then runs with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8`. A failed restore or build ends the job, so tests never run against stale binaries (#13)
 ### Deprecated
