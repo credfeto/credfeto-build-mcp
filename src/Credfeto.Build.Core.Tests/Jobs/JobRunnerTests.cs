@@ -18,6 +18,8 @@ namespace Credfeto.Build.Core.Tests.Jobs;
 
 public sealed class JobRunnerTests : TestBase, IDisposable
 {
+    private const UnixFileMode OWNER_ONLY = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     private static readonly TimeSpan JobTimeout = TimeSpan.FromMinutes(5);
 
     private readonly ScriptedProcessLauncher _launcher = new();
@@ -389,6 +391,46 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         Assert.NotNull(runner.FindStatus(third.Id));
         await AssertLogClosedAsync(first.LogPath);
         await AssertLogClosedAsync(third.LogPath);
+    }
+
+    [Fact]
+    public async Task ANewLogDirectoryIsOwnerOnlyAsync()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = this._logs.Combine("new/logs");
+
+        await using JobRunner runner = this.CreateRunner(JobRunnerSettings.Create(directory));
+        _ = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
+
+        Assert.Equal(expected: OWNER_ONLY, actual: File.GetUnixFileMode(directory));
+    }
+
+    [Fact]
+    public async Task AnExistingLogDirectoryIsTightenedToOwnerOnlyAsync()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = this._logs.Combine("existing");
+        _ = Directory.CreateDirectory(
+            path: directory,
+            unixCreateMode: OWNER_ONLY
+                | UnixFileMode.GroupRead
+                | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead
+                | UnixFileMode.OtherExecute
+        );
+
+        await using JobRunner runner = this.CreateRunner(JobRunnerSettings.Create(directory));
+        _ = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
+
+        Assert.Equal(expected: OWNER_ONLY, actual: File.GetUnixFileMode(directory));
     }
 
     private static async ValueTask AssertLogClosedAsync(string logPath)
