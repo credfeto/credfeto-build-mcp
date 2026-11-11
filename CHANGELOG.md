@@ -12,9 +12,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 ### Fixed
-- .NET server: `test` with scope `all` (the default) now leaves out the `*.Integration.Tests` and `*.Benchmark.Tests` namespaces with `--filter-not-namespace`, as pre-commit `buildtest` does, so benchmark failures CI never sees no longer fail the run. Integration and benchmark test projects can be run by name with scope `project` (#13)
 ### Changed
-- .NET server: `build` and `test` use pre-commit `buildtest`'s settings from one shared list: restore first, then build with `--no-restore`, the `buildtest` `-p:` properties and `-nodeReuse:False`; `test` then runs with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8`. A failed restore or build ends the job, so tests never run against stale binaries (#13)
 ### Deprecated
 ### Removed
 ### Deployment Changes
@@ -22,6 +20,12 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
+## [0.0.4] - 2026-11-11
+### Fixed
+- .NET server: `test` with scope `all` (the default) now leaves out the `*.Integration.Tests` and `*.Benchmark.Tests` namespaces with `--filter-not-namespace`, as pre-commit `buildtest` does, so benchmark failures CI never sees no longer fail the run. Integration and benchmark test projects can be run by name with scope `project` (#13)
+### Changed
+- .NET server: `build` and `test` use pre-commit `buildtest`'s settings from one shared list: restore first, then build with `--no-restore`, the `buildtest` `-p:` properties and `-nodeReuse:False`; `test` then runs with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8`. A failed restore or build ends the job, so tests never run against stale binaries (#13)
 
 ## [0.0.3] - 2026-11-05
 ### Fixed
