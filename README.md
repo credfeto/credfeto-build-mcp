@@ -64,7 +64,7 @@ so the agent never composes a `cd`.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `BUILD_MCP_REPO_ROOT` | `/workspace/repo` | The repository to work on. Relative paths are ignored. |
-| `BUILD_MCP_LOG_DIR` | `$TMPDIR/credfeto-build-mcp` | Where each job writes its full log (`<job id>.log`, mode 0600). |
+| `BUILD_MCP_LOG_DIR` | `$XDG_STATE_HOME/credfeto-build-mcp/logs`, else `~/.local/state/credfeto-build-mcp/logs`, else `$TMPDIR/credfeto-build-mcp-<uid>` when there is no home directory | Where each job writes its full log (`<job id>.log`, mode 0600) in a per-user folder with mode 0700. Relative paths are ignored. |
 | `BUILD_MCP_BUILDTEST` | `buildtest` on `PATH` | The absolute path of the pre-commit `buildtest` script that the `buildtest` tool runs. |
 
 ### Tools
