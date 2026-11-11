@@ -311,9 +311,11 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
             return;
         }
 
-        _ = Directory.CreateDirectory(
-            path: directory,
-            unixCreateMode: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-        );
+        const UnixFileMode ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+        _ = Directory.CreateDirectory(path: directory, unixCreateMode: ownerOnly);
+
+        // The create mode only applies to a folder that did not exist, so one left behind by an older, more
+        // permissive version is tightened here
+        File.SetUnixFileMode(path: directory, mode: ownerOnly);
     }
 }
