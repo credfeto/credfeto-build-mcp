@@ -1,5 +1,5 @@
 using System;
-using System.Threading;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Quality;
 using Credfeto.Build.Dotnet.Server.Tests.Helpers;
@@ -8,7 +8,6 @@ using Xunit;
 
 namespace Credfeto.Build.Dotnet.Server.Tests.Quality;
 
-/// <summary>Against a real git repository: a main branch, then a feature branch with changes of every kind.</summary>
 public sealed class CleanupFileSelectorTests : TestBase, IDisposable
 {
     private readonly TemporaryDirectory _repository = new();
@@ -72,15 +71,12 @@ public sealed class CleanupFileSelectorTests : TestBase, IDisposable
     [Fact]
     public async Task OnTheDefaultBranchWithNoChangesNothingIsSelectedAsync()
     {
-        CancellationToken cancellationToken = this.CancellationToken();
-        await TestGit.RunAsync(repository: this._repository.Path, arguments: ["init", "--quiet"], cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "src/Unchanged.cs", content: "class Unchanged {}\n", cancellationToken: cancellationToken);
-        await TestGit.CommitAllAsync(repository: this._repository.Path, message: "base", cancellationToken: cancellationToken);
+        await this.CreateSingleCommitAsync();
 
         CleanupSelection selection = await CleanupFileSelector.SelectAsync(
             repositoryRoot: this._repository.Path,
             scope: CleanupFileSelector.SCOPE_CHANGED,
-            cancellationToken: cancellationToken
+            cancellationToken: this.CancellationToken()
         );
 
         Assert.Null(selection.Error);
@@ -101,35 +97,90 @@ public sealed class CleanupFileSelectorTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task AMergeBaseGitCannotResolveListsNothingAsync()
+    {
+        await this.CreateSingleCommitAsync();
+
+        IReadOnlyList<string>? paths = await CleanupFileSelector.ListChangedPathsAsync(
+            repositoryRoot: this._repository.Path,
+            mergeBase: "no-such-revision",
+            cancellationToken: this.CancellationToken()
+        );
+
+        Assert.Null(paths);
+    }
+
+    [Fact]
     public static void BuildOutputAndOtherFilesAreNeverSelected()
     {
-        Assert.Empty(CleanupFileSelector.Filter(repositoryRoot: "/no/such/repo", relativePaths: ["src/obj/Generated.cs", "src/bin/X.cs", "README.md", "../outside.cs"]));
+        Assert.Empty(
+            CleanupFileSelector.Filter(
+                repositoryRoot: "/no/such/repo",
+                relativePaths: ["src/obj/Generated.cs", "src/bin/X.cs", "README.md", "../outside.cs"]
+            )
+        );
     }
 
     private async ValueTask CreateFeatureBranchAsync()
     {
-        CancellationToken cancellationToken = this.CancellationToken();
-        string root = this._repository.Path;
-
-        await TestGit.RunAsync(repository: root, arguments: ["init", "--quiet"], cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: ".gitignore", content: "obj/\n", cancellationToken: cancellationToken);
+        await this.GitAsync("init", "--quiet");
+        await this.WriteAsync(relative: ".gitignore", content: "obj/\n");
         foreach (string name in new[] { "Unchanged", "Committed", "Staged", "Unstaged" })
         {
-            _ = await this._repository.WriteAsync(relative: "src/" + name + ".cs", content: "class " + name + " {}\n", cancellationToken: cancellationToken);
+            await this.WriteAsync(relative: "src/" + name + ".cs", content: "class " + name + " {}\n");
         }
 
-        _ = await this._repository.WriteAsync(relative: "README.md", content: "readme\n", cancellationToken: cancellationToken);
-        await TestGit.CommitAllAsync(repository: root, message: "base", cancellationToken: cancellationToken);
+        await this.WriteAsync(relative: "README.md", content: "readme\n");
+        await this.CommitAsync("base");
 
-        await TestGit.RunAsync(repository: root, arguments: ["checkout", "--quiet", "-b", "feature"], cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "src/Committed.cs", content: "class Committed { }\n", cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "README.md", content: "changed\n", cancellationToken: cancellationToken);
-        await TestGit.CommitAllAsync(repository: root, message: "feature", cancellationToken: cancellationToken);
+        await this.GitAsync("checkout", "--quiet", "-b", "feature");
+        await this.WriteAsync(relative: "src/Committed.cs", content: "class Committed { }\n");
+        await this.WriteAsync(relative: "README.md", content: "changed\n");
+        await this.CommitAsync("feature");
 
-        _ = await this._repository.WriteAsync(relative: "src/Staged.cs", content: "class Staged { }\n", cancellationToken: cancellationToken);
-        await TestGit.RunAsync(repository: root, arguments: ["add", "src/Staged.cs"], cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "src/Unstaged.cs", content: "class Unstaged { }\n", cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "src/New Untracked.cs", content: "class Untracked {}\n", cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "src/obj/Generated.cs", content: "class Generated {}\n", cancellationToken: cancellationToken);
+        await this.ChangeWorkingTreeAsync();
+    }
+
+    private async ValueTask ChangeWorkingTreeAsync()
+    {
+        await this.WriteAsync(relative: "src/Staged.cs", content: "class Staged { }\n");
+        await this.GitAsync("add", "src/Staged.cs");
+        await this.WriteAsync(relative: "src/Unstaged.cs", content: "class Unstaged { }\n");
+        await this.WriteAsync(relative: "src/New Untracked.cs", content: "class Untracked {}\n");
+        await this.WriteAsync(relative: "src/obj/Generated.cs", content: "class Generated {}\n");
+    }
+
+    private async ValueTask CreateSingleCommitAsync()
+    {
+        await this.GitAsync("init", "--quiet");
+        await this.WriteAsync(relative: "src/Unchanged.cs", content: "class Unchanged {}\n");
+        await this.CommitAsync("base");
+    }
+
+    private async ValueTask WriteAsync(string relative, string content)
+    {
+        _ = await this._repository.WriteAsync(
+            relative: relative,
+            content: content,
+            cancellationToken: this.CancellationToken()
+        );
+    }
+
+    private ValueTask GitAsync(params string[] arguments)
+    {
+        return TestGit.RunAsync(
+            repository: this._repository.Path,
+            arguments: arguments,
+            cancellationToken: this.CancellationToken()
+        );
+    }
+
+    private ValueTask CommitAsync(string message)
+    {
+        return TestGit.CommitAllAsync(
+            repository: this._repository.Path,
+            message: message,
+            cancellationToken: this.CancellationToken()
+        );
     }
 }
