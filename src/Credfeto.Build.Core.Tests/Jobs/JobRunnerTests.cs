@@ -18,6 +18,8 @@ namespace Credfeto.Build.Core.Tests.Jobs;
 
 public sealed class JobRunnerTests : TestBase, IDisposable
 {
+    private const UnixFileMode OWNER_ONLY = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     private static readonly TimeSpan JobTimeout = TimeSpan.FromMinutes(5);
 
     private readonly ScriptedProcessLauncher _launcher = new();
@@ -389,6 +391,84 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         Assert.NotNull(runner.FindStatus(third.Id));
         await AssertLogClosedAsync(first.LogPath);
         await AssertLogClosedAsync(third.LogPath);
+    }
+
+    [Fact]
+    public async Task ANewLogDirectoryIsOwnerOnlyAsync()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = this._logs.Combine("new/logs");
+
+        await using JobRunner runner = this.CreateRunner(JobRunnerSettings.Create(directory));
+        _ = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
+
+        Assert.Equal(expected: OWNER_ONLY, actual: File.GetUnixFileMode(directory));
+    }
+
+    [Fact]
+    public async Task AnExistingLogDirectoryIsTightenedToOwnerOnlyAsync()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = this._logs.Combine("existing");
+        _ = Directory.CreateDirectory(
+            path: directory,
+            unixCreateMode: OWNER_ONLY
+                | UnixFileMode.GroupRead
+                | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead
+                | UnixFileMode.OtherExecute
+        );
+
+        await using JobRunner runner = this.CreateRunner(JobRunnerSettings.Create(directory));
+        _ = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
+
+        Assert.Equal(expected: OWNER_ONLY, actual: File.GetUnixFileMode(directory));
+    }
+
+    [Fact]
+    public async Task ALogDirectoryOwnedByAnotherAccountStillRunsTheJobAsync()
+    {
+        const string sharedDirectory = "/tmp";
+
+        if (OperatingSystem.IsWindows() || !Directory.Exists(sharedDirectory))
+        {
+            return;
+        }
+
+        UnixFileMode before = File.GetUnixFileMode(sharedDirectory);
+
+        try
+        {
+            // Setting the mode it already has changes nothing, and only fails when this account does not own it
+            File.SetUnixFileMode(path: sharedDirectory, mode: before);
+
+            return;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Not the owner, so the runner cannot tighten it either
+        }
+
+        await using JobRunner runner = this.CreateRunner(JobRunnerSettings.Create(sharedDirectory));
+        JobResult result = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
+
+        try
+        {
+            Assert.Equal(expected: JobState.Succeeded, actual: result.State);
+            Assert.Equal(expected: before, actual: File.GetUnixFileMode(sharedDirectory));
+        }
+        finally
+        {
+            File.Delete(result.LogPath);
+        }
     }
 
     private static async ValueTask AssertLogClosedAsync(string logPath)

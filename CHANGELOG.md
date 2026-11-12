@@ -12,6 +12,8 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 ### Fixed
+- The default job log folder is now per-user ($XDG_STATE_HOME/credfeto-build-mcp/logs, else ~/.local/state/credfeto-build-mcp/logs, else a credfeto-build-mcp-<uid> folder in the temp directory) and is created owner-only (0700) when BUILD_MCP_LOG_DIR is unset, so users on a shared machine no longer share job logs (#17)
+- The solution builds again: long methods in the .NET server DotnetDetector and CleanupFileSelector are split into smaller methods to satisfy the MA0051 method-length analyzer (refactor only, no behaviour change) (#17)
 ### Changed
 ### Deprecated
 ### Removed
