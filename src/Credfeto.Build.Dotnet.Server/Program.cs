@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,7 +12,20 @@ namespace Credfeto.Build.Dotnet.Server;
 
 public static class Program
 {
-    public static async Task<int> Main()
+    public static Task<int> Main(string[] args)
+    {
+        return CommandLine
+            .RunAsync(
+                arguments: args,
+                output: Console.Out,
+                error: Console.Error,
+                serve: ServeAsync,
+                cancellationToken: CancellationToken.None
+            )
+            .AsTask();
+    }
+
+    private static async ValueTask<int> ServeAsync(CancellationToken cancellationToken)
     {
         // SIGTERM and Ctrl+C end the session cleanly, so a running job's process tree is killed rather than orphaned
         TaskCompletionSource signalled = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -24,7 +38,7 @@ public static class Program
             handler: context => Signal(context: context, signalled: signalled)
         );
 
-        using CancellationTokenSource shutdown = new();
+        using CancellationTokenSource shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         BuildServerEnvironment environment = BuildServerEnvironment.FromProcess();
         DotnetDetection detection = await DotnetDetector.DetectAsync(
             repositoryRoot: environment.RepositoryRoot,
@@ -40,7 +54,9 @@ public static class Program
             NullLoggerFactory.Instance
         );
 
-        Task server = ServerRunner.RunAsync(services: services, transport: transport, cancellationToken: shutdown.Token).AsTask();
+        Task server = ServerRunner
+            .RunAsync(services: services, transport: transport, cancellationToken: shutdown.Token)
+            .AsTask();
 
         if (await Task.WhenAny(server, signalled.Task) != server)
         {

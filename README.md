@@ -172,6 +172,18 @@ dotnet tool install -g Credfeto.Build.Dotnet.Server
 This puts the command `credfeto-build-dotnet` in `~/.dotnet/tools`. Only `linux-x64` is packaged for now: Native AOT
 cannot cross-compile to another architecture, so `linux-arm64` needs to be packed on an arm64 build host.
 
+### Command line
+
+With no arguments the server serves MCP over stdio. It also takes one of these switches:
+
+- `--self-test`: builds the service provider and configuration and resolves every dependency, then exits: `0` when
+  that works, `1` with a one-line `self-test failed: <reason>` on stderr when it does not. It starts no MCP transport,
+  reads no stdin, opens no network connection and does no repository or file work, so an image build can run
+  `credfeto-build-dotnet --self-test` to check the installed tool loads.
+- `--help`, `-h`: lists the switches and exits with `0`.
+
+Any other argument, or more than one switch, prints a one-line error on stderr and exits with `2`.
+
 ### Packing, publishing and start-up time
 
 For a Native AOT tool the SDK on its own packs only the pointer package from a plain `dotnet pack`, and skips the
