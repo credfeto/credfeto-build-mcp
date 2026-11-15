@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using Credfeto.Build.Dotnet.Server.Models;
 using Credfeto.Build.Dotnet.Server.Packages;
 using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
@@ -43,6 +44,28 @@ public sealed class PackageSearchParserTests : TestBase
             actualString: problem.Text,
             comparisonType: StringComparison.Ordinal
         );
+    }
+
+    [Theory]
+    [InlineData(
+        "Unable to load the service index for source https://user:s3cret@feed.example/v3/index.json?code=key.",
+        "Unable to load the service index for source https://feed.example/v3/index.json"
+    )]
+    [InlineData(
+        "Response status code 401 for https://feed.example/F/x/v3",
+        "Response status code 401 for https://feed.example/F/x/v3"
+    )]
+    [InlineData("No URL here", "No URL here")]
+    public static void ProblemsNeverCarryCredentialsInUrls(string text, string redacted)
+    {
+        string json =
+            "{ \"searchResult\": [ { \"sourceName\": \"Feed\", \"problems\": [ { \"text\": \""
+            + JsonEncodedText.Encode(text).ToString()
+            + "\" } ], \"packages\": [] } ] }";
+
+        PackageSearchResult result = PackageSearchParser.Parse(json: json, packageId: "Example.Package");
+
+        Assert.Equal(expected: redacted, actual: Assert.Single(result.Problems).Text);
     }
 
     [Fact]

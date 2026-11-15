@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Core.Jobs.Services;
@@ -54,6 +56,49 @@ public sealed class ProcessCommandRunnerTests : TestBase, IDisposable
 
         Assert.True(condition: output.TimedOut, userMessage: "the timeout applies");
         Assert.False(condition: output.Succeeded, userMessage: "timed out");
+    }
+
+    [Fact]
+    public async Task ACancelledCallKillsTheCommandAsync()
+    {
+        string pidFile = this._directory.Combine("pid");
+        ProcessStep step = await this.ScriptAsync("echo $$ > \"" + pidFile + "\"\nexec sleep 30\n");
+        using CancellationTokenSource cancellation = new(TimeSpan.FromSeconds(1));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            _ = await this._runner.RunAsync(
+                step: step,
+                timeout: TimeSpan.FromSeconds(30),
+                cancellationToken: cancellation.Token
+            )
+        );
+
+        string pid = (await File.ReadAllTextAsync(path: pidFile, cancellationToken: this.CancellationToken())).Trim();
+        Assert.True(condition: await this.HasExitedAsync(pid), userMessage: "the cancelled process was killed");
+    }
+
+    private async ValueTask<bool> HasExitedAsync(string pid)
+    {
+        for (int attempt = 0; attempt < 50; attempt++)
+        {
+            // A killed child can linger briefly as a zombie until it is reaped
+            if (
+                !File.Exists("/proc/" + pid + "/cmdline")
+                || (
+                    await File.ReadAllTextAsync(
+                        path: "/proc/" + pid + "/cmdline",
+                        cancellationToken: this.CancellationToken()
+                    )
+                ).Length == 0
+            )
+            {
+                return true;
+            }
+
+            await Task.Delay(millisecondsDelay: 100, cancellationToken: this.CancellationToken());
+        }
+
+        return false;
     }
 
     [Fact]

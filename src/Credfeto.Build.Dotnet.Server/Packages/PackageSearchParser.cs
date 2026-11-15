@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Credfeto.Build.Dotnet.Server.Models;
 using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Packages;
 
 // Reads dotnet package search --format json: searchResult[] of { sourceName, problems[], packages[] { id, version } }
-public static class PackageSearchParser
+public static partial class PackageSearchParser
 {
     private const string UNREADABLE = "dotnet package search did not return the JSON it was asked for";
 
@@ -72,7 +73,7 @@ public static class PackageSearchParser
     {
         foreach (JsonElement problem in Items(element: element, name: "problems"))
         {
-            problems.Add(new(Source: source, Text: problem.GetProperty("text").GetString() ?? string.Empty));
+            problems.Add(new(Source: source, Text: Redact(problem.GetProperty("text").GetString() ?? string.Empty)));
         }
     }
 
@@ -88,4 +89,17 @@ public static class PackageSearchParser
 
         return [];
     }
+
+    // NuGet quotes the source URL in its problems; user info or a query string in it can carry a feed credential
+    public static string Redact(string text)
+    {
+        return UrlCredentials().Replace(input: text, replacement: "${scheme}${address}");
+    }
+
+    [GeneratedRegex(
+        pattern: @"(?<scheme>[A-Za-z][A-Za-z0-9+.-]*://)(?:[^/\s@]*@)?(?<address>[^\s?#]*)(?:[?#][^\s]*)?",
+        options: RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 1000
+    )]
+    private static partial Regex UrlCredentials();
 }

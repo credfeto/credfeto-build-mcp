@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -31,7 +30,7 @@ public sealed class ProcessCommandRunner : ICommandRunner
         using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
 
-        using Process process = new() { StartInfo = CreateStartInfo(step) };
+        using Process process = new() { StartInfo = step.CreateStartInfo() };
 
         try
         {
@@ -58,9 +57,15 @@ public sealed class ProcessCommandRunner : ICommandRunner
 
             return new(ExitCode: process.ExitCode, StandardOutput: this.Mask(standardOutput), TimedOut: false);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Past the deadline or cancelled by the caller, the process tree must not outlive the call
             Kill(process);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
 
             return new(ExitCode: CommandOutput.NOT_STARTED, StandardOutput: string.Empty, TimedOut: true);
         }
@@ -74,32 +79,6 @@ public sealed class ProcessCommandRunner : ICommandRunner
     private string Mask(string output)
     {
         return string.Join(separator: '\n', values: output.Split(LineBreaks).Select(this._masker.Mask));
-    }
-
-    private static ProcessStartInfo CreateStartInfo(ProcessStep step)
-    {
-        ProcessStartInfo startInfo = new()
-        {
-            FileName = step.FileName,
-            WorkingDirectory = step.WorkingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
-        foreach (string argument in step.Arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        foreach (KeyValuePair<string, string> variable in step.Environment)
-        {
-            startInfo.Environment[variable.Key] = variable.Value;
-        }
-
-        return startInfo;
     }
 
     private static void Kill(Process process)

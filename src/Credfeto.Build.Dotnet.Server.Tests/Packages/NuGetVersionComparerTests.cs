@@ -20,6 +20,7 @@ public sealed class NuGetVersionComparerTests : TestBase
     [InlineData("1.6.0-beta.7.gbbd7fe56aa", "1.6.0")]
     [InlineData("not-a-version", "0.0.1")]
     [InlineData("1.2.3.4.5", "0.0.1")]
+    [InlineData("not-a-version", "v1.0.0")]
     public static void OrdersVersionsTheNuGetWay(string lower, string higher)
     {
         Assert.True(

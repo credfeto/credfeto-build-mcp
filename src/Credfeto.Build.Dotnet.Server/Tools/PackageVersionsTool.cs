@@ -169,7 +169,12 @@ public sealed partial class PackageVersionsTool : BuildTool
             );
         }
 
-        return output.ExitCode == 0
+        if (output.ExitCode == CommandOutput.NOT_STARTED)
+        {
+            throw new ToolUnavailableException("dotnet " + step.Name + " could not be started");
+        }
+
+        return output.Succeeded
             ? output
             : throw new ToolUnavailableException(
                 "dotnet "

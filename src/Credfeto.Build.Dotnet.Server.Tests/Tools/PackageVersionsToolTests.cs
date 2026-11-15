@@ -175,11 +175,50 @@ public sealed class PackageVersionsToolTests : TestBase, IDisposable
         Assert.Equal(expected: message, actual: Text(result));
     }
 
+    [Fact]
+    public async Task ByDefaultOnlyReleaseVersionsAreSearchedForAsync()
+    {
+        this._commands.Answer(stepName: "package search", standardOutput: PackageSearchFixtures.FOUND);
+
+        using JsonDocument response = await this.CallForJsonAsync(
+            new(StringComparer.Ordinal) { ["package_id"] = Json("Example.Package") }
+        );
+
+        Assert.DoesNotContain(
+            expected: "--prerelease",
+            collection: this._commands.Steps[0].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.False(
+            condition: response.RootElement.GetProperty("includePrerelease").GetBoolean(),
+            userMessage: "release versions only unless asked"
+        );
+    }
+
+    [Theory]
+    [InlineData("nuget config paths", 2, "dotnet nuget config paths failed with exit code 2")]
+    [InlineData("package search", CommandOutput.NOT_STARTED, "dotnet package search could not be started")]
+    public async Task AFailedCommandIsAToolErrorAsync(string stepName, int exitCode, string message)
+    {
+        this._commands.Answer(stepName: "package search", standardOutput: PackageSearchFixtures.FOUND)
+            .Answer(
+                stepName: stepName,
+                output: new CommandOutput(ExitCode: exitCode, StandardOutput: string.Empty, TimedOut: false)
+            );
+
+        CallToolResult result = await this.CallAsync(Arguments(packageId: "Example.Package"));
+
+        Assert.True(condition: result.IsError, userMessage: "the command failed");
+        Assert.Equal(expected: message, actual: Text(result));
+    }
+
     [Theory]
     [InlineData("--source")]
     [InlineData("Example Package")]
     [InlineData("")]
     [InlineData("Example/../Package")]
+    [InlineData("Example.Package\n")]
+    [InlineData("-Example.Package")]
     public async Task APackageIdMustLookLikeOneAsync(string packageId)
     {
         CallToolResult result = await this.CallAsync(Arguments(packageId: packageId));
@@ -244,16 +283,18 @@ public sealed class PackageVersionsToolTests : TestBase, IDisposable
     {
         return new(StringComparer.Ordinal)
         {
-            ["package_id"] = JsonSerializer.SerializeToElement(
-                value: packageId,
-                jsonTypeInfo: TestJsonContext.Default.String
-            ),
+            ["package_id"] = Json(packageId),
             ["take"] = JsonSerializer.SerializeToElement(value: take, jsonTypeInfo: TestJsonContext.Default.Int32),
             ["include_prerelease"] = JsonSerializer.SerializeToElement(
                 value: includePrerelease,
                 jsonTypeInfo: TestJsonContext.Default.Boolean
             ),
         };
+    }
+
+    private static JsonElement Json(string value)
+    {
+        return JsonSerializer.SerializeToElement(value: value, jsonTypeInfo: TestJsonContext.Default.String);
     }
 
     private static IEnumerable<string> Strings(JsonElement array)

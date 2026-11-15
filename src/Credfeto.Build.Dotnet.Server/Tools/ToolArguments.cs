@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
@@ -77,7 +78,7 @@ public sealed partial class ToolArguments
     {
         string? value = this.GetString(property.Name);
 
-        return value is not null && JobId().IsMatch(value)
+        return IsWholeMatch(value: value, pattern: JobId())
             ? value
             : throw new ToolArgumentException(
                 "Invalid value for " + property.Name + "; expected a job id from a previous call"
@@ -103,7 +104,7 @@ public sealed partial class ToolArguments
     {
         string? value = this.GetString(property.Name);
 
-        return value is not null && pattern.IsMatch(value)
+        return IsWholeMatch(value: value, pattern: pattern)
             ? value
             : throw new ToolArgumentException(
                 "Invalid value for " + property.Name + "; expected a value matching " + property.Pattern
@@ -143,6 +144,12 @@ public sealed partial class ToolArguments
         return value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : throw new ToolArgumentException("Invalid value for " + name + "; expected a string");
+    }
+
+    // A .NET $ also matches before a final newline, so the match must span the whole value
+    private static bool IsWholeMatch([NotNullWhen(true)] string? value, Regex pattern)
+    {
+        return value is not null && pattern.Match(value) is { Success: true } match && match.Length == value.Length;
     }
 
     private static string Names(IReadOnlyList<SchemaProperty> schema)
