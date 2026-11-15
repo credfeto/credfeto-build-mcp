@@ -69,10 +69,7 @@ public sealed class BuildtestLocatorTests : TestBase, IDisposable
 
         ToolUnavailableException exception = Assert.Throws<ToolUnavailableException>(locator.Require);
         Assert.Equal(
-            expected: BuildtestLocator.VARIABLE
-                + " is set to \""
-                + configured
-                + "\", which is not the absolute path of an executable file",
+            expected: BuildtestLocator.VARIABLE + " is set but is not the absolute path of an executable file",
             actual: exception.Message
         );
     }

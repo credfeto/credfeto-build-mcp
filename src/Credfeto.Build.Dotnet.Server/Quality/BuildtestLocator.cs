@@ -32,7 +32,7 @@ public sealed class BuildtestLocator
             return Path.IsPathFullyQualified(configured) && ExecutableSearch.IsExecutable(configured)
                 ? configured
                 : throw new ToolUnavailableException(
-                    VARIABLE + " is set to \"" + configured + "\", which is not the absolute path of an executable file"
+                    VARIABLE + " is set but is not the absolute path of an executable file"
                 );
         }
 
