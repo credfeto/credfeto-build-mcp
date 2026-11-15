@@ -19,4 +19,31 @@ public sealed record ProcessStep(
         this.Arguments.Count == 0
             ? this.FileName
             : this.FileName + " " + string.Join(separator: ' ', values: this.Arguments);
+
+    // The executable started directly with the argument vector (no shell) and every stream redirected
+    public ProcessStartInfo CreateStartInfo()
+    {
+        ProcessStartInfo startInfo = new()
+        {
+            FileName = this.FileName,
+            WorkingDirectory = this.WorkingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        foreach (string argument in this.Arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        foreach (KeyValuePair<string, string> variable in this.Environment)
+        {
+            startInfo.Environment[variable.Key] = variable.Value;
+        }
+
+        return startInfo;
+    }
 }

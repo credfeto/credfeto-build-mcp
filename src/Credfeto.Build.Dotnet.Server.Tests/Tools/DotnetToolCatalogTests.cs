@@ -38,6 +38,7 @@ public sealed class DotnetToolCatalogTests : TestBase
                 "detect",
                 "job_result",
                 "job_status",
+                "package_versions",
                 "restore",
                 "test",
             ],
@@ -60,6 +61,7 @@ public sealed class DotnetToolCatalogTests : TestBase
                 "detect",
                 "job_result",
                 "job_status",
+                "package_versions",
                 "restore",
             ],
             actual: Names(Create()),
@@ -120,7 +122,8 @@ public sealed class DotnetToolCatalogTests : TestBase
                 bool constrained =
                     property.Value.TryGetProperty(propertyName: "enum", value: out _)
                     || property.Value.TryGetProperty(propertyName: "pattern", value: out _)
-                    || StringComparer.Ordinal.Equals(x: property.Value.GetProperty("type").GetString(), y: "boolean");
+                    || StringComparer.Ordinal.Equals(x: property.Value.GetProperty("type").GetString(), y: "boolean")
+                    || IsBoundedInteger(property.Value);
 
                 Assert.True(
                     condition: constrained,
@@ -153,6 +156,7 @@ public sealed class DotnetToolCatalogTests : TestBase
     [InlineData("detect", true)]
     [InlineData("job_status", true)]
     [InlineData("job_result", true)]
+    [InlineData("package_versions", true)]
     [InlineData("build", false)]
     [InlineData("coverage", false)]
     [InlineData("cleanup", false)]
@@ -173,6 +177,39 @@ public sealed class DotnetToolCatalogTests : TestBase
             runner: new RecordingJobRunner(),
             detection: TestRepositories.Detected(TestRepositories.Create(root: "/workspace/repo", unitTests))
         );
+    }
+
+    [Fact]
+    public static void PackageVersionsTakesAPatternCheckedIdAFlagAndABoundedCount()
+    {
+        JsonElement schema = Schema(tools: Create(TestRepositories.CoreTests), name: "package_versions");
+        JsonElement properties = schema.GetProperty("properties");
+
+        Assert.Equal(
+            expected: PackageVersionsTool.PACKAGE_ID_PATTERN,
+            actual: properties.GetProperty("package_id").GetProperty("pattern").GetString()
+        );
+        Assert.Equal(
+            expected: "package_id",
+            actual: Assert.Single(schema.GetProperty("required").EnumerateArray()).GetString()
+        );
+        Assert.False(
+            condition: properties.GetProperty("include_prerelease").GetProperty("default").GetBoolean(),
+            userMessage: "only release versions are listed by default"
+        );
+
+        JsonElement take = properties.GetProperty("take");
+        Assert.Equal(expected: "integer", actual: take.GetProperty("type").GetString());
+        Assert.Equal(expected: 1, actual: take.GetProperty("minimum").GetInt32());
+        Assert.Equal(expected: PackageVersionsTool.MAX_TAKE, actual: take.GetProperty("maximum").GetInt32());
+        Assert.Equal(expected: PackageVersionsTool.DEFAULT_TAKE, actual: take.GetProperty("default").GetInt32());
+    }
+
+    private static bool IsBoundedInteger(JsonElement property)
+    {
+        return StringComparer.Ordinal.Equals(x: property.GetProperty("type").GetString(), y: "integer")
+            && property.TryGetProperty(propertyName: "minimum", value: out _)
+            && property.TryGetProperty(propertyName: "maximum", value: out _);
     }
 
     private static IEnumerable<string> Names(IReadOnlyList<McpServerTool> tools)

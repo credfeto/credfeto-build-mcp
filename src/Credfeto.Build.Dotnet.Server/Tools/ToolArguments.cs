@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -76,7 +78,7 @@ public sealed partial class ToolArguments
     {
         string? value = this.GetString(property.Name);
 
-        return value is not null && JobId().IsMatch(value)
+        return IsWholeMatch(value: value, pattern: JobId())
             ? value
             : throw new ToolArgumentException(
                 "Invalid value for " + property.Name + "; expected a job id from a previous call"
@@ -98,6 +100,40 @@ public sealed partial class ToolArguments
         };
     }
 
+    public string GetMatching(SchemaProperty property, Regex pattern)
+    {
+        string? value = this.GetString(property.Name);
+
+        return IsWholeMatch(value: value, pattern: pattern)
+            ? value
+            : throw new ToolArgumentException(
+                "Invalid value for " + property.Name + "; expected a value matching " + property.Pattern
+            );
+    }
+
+    public int GetInteger(SchemaProperty property)
+    {
+        if (!this._values.TryGetValue(key: property.Name, value: out JsonElement value))
+        {
+            return int.Parse(s: property.DefaultValue ?? "0", provider: CultureInfo.InvariantCulture);
+        }
+
+        return
+            value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out int number)
+            && number >= property.Minimum
+            && number <= property.Maximum
+            ? number
+            : throw new ToolArgumentException(
+                "Invalid value for "
+                    + property.Name
+                    + "; expected a whole number from "
+                    + property.Minimum.ToString(CultureInfo.InvariantCulture)
+                    + " to "
+                    + property.Maximum.ToString(CultureInfo.InvariantCulture)
+            );
+    }
+
     private string? GetString(string name)
     {
         if (!this._values.TryGetValue(key: name, value: out JsonElement value))
@@ -108,6 +144,12 @@ public sealed partial class ToolArguments
         return value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : throw new ToolArgumentException("Invalid value for " + name + "; expected a string");
+    }
+
+    // A .NET $ also matches before a final newline, so the match must span the whole value
+    private static bool IsWholeMatch([NotNullWhen(true)] string? value, Regex pattern)
+    {
+        return value is not null && pattern.Match(value) is { Success: true } match && match.Length == value.Length;
     }
 
     private static string Names(IReadOnlyList<SchemaProperty> schema)
