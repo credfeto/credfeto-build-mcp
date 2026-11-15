@@ -30,16 +30,27 @@ public static class McpServerProcess
         using Process process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("The server did not start");
 
-        McpProbeResult result = await McpProbe.ListToolsAsync(
-            toServer: process.StandardInput.BaseStream,
-            fromServer: process.StandardOutput,
-            cancellationToken: cancellationToken
-        );
-        TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
+        try
+        {
+            McpProbeResult result = await McpProbe.ListToolsAsync(
+                toServer: process.StandardInput.BaseStream,
+                fromServer: process.StandardOutput,
+                cancellationToken: cancellationToken
+            );
+            TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
 
-        process.StandardInput.Close();
-        await process.WaitForExitAsync(cancellationToken);
+            process.StandardInput.Close();
+            await process.WaitForExitAsync(cancellationToken);
 
-        return new(Result: result, Elapsed: elapsed);
+            return new(Result: result, Elapsed: elapsed);
+        }
+        finally
+        {
+            // A probe that failed or was cancelled must not leave the server running
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
     }
 }
