@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Credfeto.Build.Core.Configuration;
+using Credfeto.Build.Core.Configuration.Exceptions;
 using FunFair.Test.Common;
 using Xunit;
 
@@ -41,11 +42,48 @@ public sealed class BuildServerEnvironmentTests : TestBase
     [InlineData("relative/repo")]
     [InlineData("")]
     [InlineData("   ")]
-    public static void RelativeOrBlankRootFallsBackToTheDefault(string value)
+    public static void ARootThatIsSetButNotAbsoluteIsAnError(string value)
     {
-        BuildServerEnvironment environment = Resolve((BuildServerEnvironment.REPOSITORY_ROOT_VARIABLE, value));
+        InvalidBuildConfigurationException exception = Assert.Throws<InvalidBuildConfigurationException>(() =>
+            Resolve((BuildServerEnvironment.REPOSITORY_ROOT_VARIABLE, value))
+        );
+
+        Assert.Equal(
+            expected: "BUILD_MCP_REPO_ROOT is set to \""
+                + value
+                + "\", which is not an absolute path: set it to an absolute path, or unset it to use /workspace/repo",
+            actual: exception.Message
+        );
+    }
+
+    [Theory]
+    [InlineData("relative/logs")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public static void ALogDirectoryThatIsSetButNotAbsoluteIsAnError(string value)
+    {
+        InvalidBuildConfigurationException exception = Assert.Throws<InvalidBuildConfigurationException>(() =>
+            Resolve(
+                (BuildServerEnvironment.LOG_DIRECTORY_VARIABLE, value),
+                (BuildServerEnvironment.HOME_VARIABLE, "/home/user")
+            )
+        );
+
+        Assert.Equal(
+            expected: "BUILD_MCP_LOG_DIR is set to \""
+                + value
+                + "\", which is not an absolute path: set it to an absolute path, or unset it to use /home/user/.local/state/credfeto-build-mcp/logs",
+            actual: exception.Message
+        );
+    }
+
+    [Fact]
+    public static void AnUnsetRootUsesTheDefaultEvenWithAnAbsoluteLogDirectory()
+    {
+        BuildServerEnvironment environment = Resolve((BuildServerEnvironment.LOG_DIRECTORY_VARIABLE, "/work/logs"));
 
         Assert.Equal(expected: BuildServerEnvironment.DEFAULT_REPOSITORY_ROOT, actual: environment.RepositoryRoot);
+        Assert.Equal(expected: "/work/logs", actual: environment.LogDirectory);
     }
 
     [Fact]
@@ -90,17 +128,6 @@ public sealed class BuildServerEnvironmentTests : TestBase
         BuildServerEnvironment environment = Resolve((BuildServerEnvironment.HOME_VARIABLE, value));
 
         Assert.Equal(expected: TemporaryFolderFor(CURRENT_USER), actual: environment.LogDirectory);
-    }
-
-    [Fact]
-    public static void RelativeLogDirectoryFallsBackToThePerUserDefault()
-    {
-        BuildServerEnvironment environment = Resolve(
-            (BuildServerEnvironment.LOG_DIRECTORY_VARIABLE, "relative/logs"),
-            (BuildServerEnvironment.HOME_VARIABLE, "/home/user")
-        );
-
-        Assert.Equal(expected: "/home/user/.local/state/credfeto-build-mcp/logs", actual: environment.LogDirectory);
     }
 
     [Fact]
@@ -167,9 +194,8 @@ public sealed class BuildServerEnvironmentTests : TestBase
             variables[name] = value;
         }
 
-        return BuildServerEnvironment.Resolve(
-            getVariable: variables.GetValueOrDefault,
-            currentUser: static () => CURRENT_USER
+        return BuildServerEnvironment.Resolve(getVariable: variables.GetValueOrDefault, currentUser: static () =>
+            CURRENT_USER
         );
     }
 

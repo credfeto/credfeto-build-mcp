@@ -25,7 +25,13 @@ public sealed class BuildtestLocatorTests : TestBase, IDisposable
         string configured = await this.ScriptAsync("configured/buildtest");
         string onPath = await this.ScriptAsync("bin/buildtest");
 
-        BuildtestLocator locator = Locator(new(StringComparer.Ordinal) { [BuildtestLocator.VARIABLE] = configured, ["PATH"] = Path.GetDirectoryName(onPath) });
+        BuildtestLocator locator = Locator(
+            new(StringComparer.Ordinal)
+            {
+                [BuildtestLocator.VARIABLE] = configured,
+                ["PATH"] = Path.GetDirectoryName(onPath),
+            }
+        );
 
         Assert.Equal(expected: configured, actual: locator.Require());
     }
@@ -35,7 +41,12 @@ public sealed class BuildtestLocatorTests : TestBase, IDisposable
     {
         string onPath = await this.ScriptAsync("bin/buildtest");
 
-        BuildtestLocator locator = Locator(new(StringComparer.Ordinal) { ["PATH"] = "/no/such/dir" + Path.PathSeparator + Path.GetDirectoryName(onPath) });
+        BuildtestLocator locator = Locator(
+            new(StringComparer.Ordinal)
+            {
+                ["PATH"] = "/no/such/dir" + Path.PathSeparator + Path.GetDirectoryName(onPath),
+            }
+        );
 
         Assert.Equal(expected: onPath, actual: locator.Require());
     }
@@ -43,12 +54,24 @@ public sealed class BuildtestLocatorTests : TestBase, IDisposable
     [Theory]
     [InlineData("relative/buildtest")]
     [InlineData("/no/such/buildtest")]
-    public void AVariableThatIsNotAnAbsoluteExecutableIsAClearFailure(string configured)
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task AVariableThatIsNotAnAbsoluteExecutableIsAClearFailureAsync(string configured)
     {
-        BuildtestLocator locator = Locator(new(StringComparer.Ordinal) { [BuildtestLocator.VARIABLE] = configured, ["PATH"] = this._directory.Path });
+        string onPath = await this.ScriptAsync("bin/buildtest");
+        BuildtestLocator locator = Locator(
+            new(StringComparer.Ordinal)
+            {
+                [BuildtestLocator.VARIABLE] = configured,
+                ["PATH"] = Path.GetDirectoryName(onPath),
+            }
+        );
 
         ToolUnavailableException exception = Assert.Throws<ToolUnavailableException>(locator.Require);
-        Assert.Contains(expectedSubstring: BuildtestLocator.VARIABLE, actualString: exception.Message, comparisonType: StringComparison.Ordinal);
+        Assert.Equal(
+            expected: BuildtestLocator.VARIABLE + " is set but is not the absolute path of an executable file",
+            actual: exception.Message
+        );
     }
 
     [Fact]
@@ -57,7 +80,11 @@ public sealed class BuildtestLocatorTests : TestBase, IDisposable
         BuildtestLocator locator = Locator(new(StringComparer.Ordinal) { ["PATH"] = this._directory.Path });
 
         ToolUnavailableException exception = Assert.Throws<ToolUnavailableException>(locator.Require);
-        Assert.Contains(expectedSubstring: "buildtest script was not found", actualString: exception.Message, comparisonType: StringComparison.Ordinal);
+        Assert.Contains(
+            expectedSubstring: "buildtest script was not found",
+            actualString: exception.Message,
+            comparisonType: StringComparison.Ordinal
+        );
     }
 
     private static BuildtestLocator Locator(Dictionary<string, string?> variables)
@@ -67,7 +94,11 @@ public sealed class BuildtestLocatorTests : TestBase, IDisposable
 
     private async ValueTask<string> ScriptAsync(string relative)
     {
-        string path = await this._directory.WriteAsync(relative: relative, content: "#!/bin/sh\nexit 0\n", cancellationToken: this.CancellationToken());
+        string path = await this._directory.WriteAsync(
+            relative: relative,
+            content: "#!/bin/sh\nexit 0\n",
+            cancellationToken: this.CancellationToken()
+        );
         Executable.Mark(path);
 
         return path;

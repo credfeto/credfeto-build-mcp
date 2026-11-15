@@ -57,15 +57,17 @@ carries on without it; the per-call check still applies.
 
 ### Repository root
 
-The repository the server works on is **never** a tool argument. It is `BUILD_MCP_REPO_ROOT` if that is set to an
-absolute path, and otherwise `/workspace/repo`. Every command runs with a fixed working directory under that root,
+The repository the server works on is **never** a tool argument. It is `BUILD_MCP_REPO_ROOT` when that is set, and
+`/workspace/repo` when it is unset. A value that is set but is not an absolute path (relative, empty or whitespace)
+stops the server at startup (and fails `--self-test`) with exit code 1 and a message on stderr naming the variable
+and the value; it is never swapped for the default. `BUILD_MCP_LOG_DIR` follows the same rule. Every command runs with a fixed working directory under that root,
 so the agent never composes a `cd`.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `BUILD_MCP_REPO_ROOT` | `/workspace/repo` | The repository to work on. Relative paths are ignored. |
-| `BUILD_MCP_LOG_DIR` | `$XDG_STATE_HOME/credfeto-build-mcp/logs`, else `~/.local/state/credfeto-build-mcp/logs`, else `$TMPDIR/credfeto-build-mcp-<uid>` when there is no home directory | Where each job writes its full log (`<job id>.log`, mode 0600) in a per-user folder with mode 0700. Relative paths are ignored. |
-| `BUILD_MCP_BUILDTEST` | `buildtest` on `PATH` | The absolute path of the pre-commit `buildtest` script that the `buildtest` tool runs. |
+| `BUILD_MCP_REPO_ROOT` | `/workspace/repo` | The repository to work on. Must be an absolute path when set; anything else is a startup error. |
+| `BUILD_MCP_LOG_DIR` | `$XDG_STATE_HOME/credfeto-build-mcp/logs`, else `~/.local/state/credfeto-build-mcp/logs`, else `$TMPDIR/credfeto-build-mcp-<uid>` when there is no home directory | Where each job writes its full log (`<job id>.log`, mode 0600) in a per-user folder with mode 0700. Must be an absolute path when set; anything else is a startup error. A relative `XDG_STATE_HOME` or `HOME` is ignored when choosing the default. |
+| `BUILD_MCP_BUILDTEST` | `buildtest` on `PATH` | The absolute path of the pre-commit `buildtest` script that the `buildtest` tool runs. When set to anything else (including empty) the `buildtest` tool fails with a message naming the variable. |
 
 ### Tools
 
