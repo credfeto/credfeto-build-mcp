@@ -11,6 +11,18 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
+### Fixed
+### Changed
+### Deprecated
+### Removed
+### Deployment Changes
+
+<!--
+Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
+-->
+
+## [0.0.5] - 2026-11-15
+### Added
 - `--self-test` and `--help` command-line switches for credfeto-build-dotnet
 - .NET server: a `package_versions` tool lists a NuGet package's versions on the repository's configured package sources (`dotnet package search --exact-match` from the solution directory, never `--source`), newest first, with the latest stable and prerelease version per source and overall, and whether package source mapping lets restore use each source, so agents no longer query nuget.org directly (#26)
 - The `coverage` tool gains a `write_report` argument that writes the .NET section of COVERAGE.md with the measured per-component and Overall coverage, giving the coverage ratchet a committed baseline to compare against (#12)
@@ -22,13 +34,6 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - With `BUILD_MCP_REPO_ROOT` unset and no `/workspace/repo` folder, the server now uses the git top-level folder of the directory it was started in, and stops at startup with a clear stderr message (exit code 1) when that is not a git checkout, instead of serving a missing folder. At startup it writes the chosen repository root and its source (the variable, the default or the git root) to stderr, never stdout (#29)
 ### Changed
 - SDK - Updated DotNet SDK to 11.0.100
-### Deprecated
-### Removed
-### Deployment Changes
-
-<!--
-Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
--->
 
 ## [0.0.4] - 2026-11-11
 ### Fixed
