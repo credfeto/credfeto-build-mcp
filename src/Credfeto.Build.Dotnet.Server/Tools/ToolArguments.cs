@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -96,6 +97,40 @@ public sealed partial class ToolArguments
             JsonValueKind.False => false,
             _ => throw new ToolArgumentException("Invalid value for " + property.Name + "; expected true or false"),
         };
+    }
+
+    public string GetMatching(SchemaProperty property, Regex pattern)
+    {
+        string? value = this.GetString(property.Name);
+
+        return value is not null && pattern.IsMatch(value)
+            ? value
+            : throw new ToolArgumentException(
+                "Invalid value for " + property.Name + "; expected a value matching " + property.Pattern
+            );
+    }
+
+    public int GetInteger(SchemaProperty property)
+    {
+        if (!this._values.TryGetValue(key: property.Name, value: out JsonElement value))
+        {
+            return int.Parse(s: property.DefaultValue ?? "0", provider: CultureInfo.InvariantCulture);
+        }
+
+        return
+            value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out int number)
+            && number >= property.Minimum
+            && number <= property.Maximum
+            ? number
+            : throw new ToolArgumentException(
+                "Invalid value for "
+                    + property.Name
+                    + "; expected a whole number from "
+                    + property.Minimum.ToString(CultureInfo.InvariantCulture)
+                    + " to "
+                    + property.Maximum.ToString(CultureInfo.InvariantCulture)
+            );
     }
 
     private string? GetString(string name)

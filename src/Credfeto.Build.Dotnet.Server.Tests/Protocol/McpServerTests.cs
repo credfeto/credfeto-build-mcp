@@ -21,6 +21,7 @@ public sealed class McpServerTests : TestBase
     private static readonly string[] AllTools =
     [
         "detect",
+        "package_versions",
         "restore",
         "build",
         "test",

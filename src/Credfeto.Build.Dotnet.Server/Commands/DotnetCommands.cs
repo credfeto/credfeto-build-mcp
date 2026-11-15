@@ -156,6 +156,25 @@ public static class DotnetCommands
         );
     }
 
+    // Never --source: from the solution directory the repository's NuGet.config hierarchy picks the sources
+    public static ProcessStep PackageSearch(DotnetRepository repository, string packageId, bool includePrerelease)
+    {
+        List<string> arguments = ["package", "search", packageId, "--exact-match", "--format", "json"];
+
+        if (includePrerelease)
+        {
+            arguments.Add("--prerelease");
+        }
+
+        return Step(name: "package search", repository: repository, arguments: arguments);
+    }
+
+    // The NuGet.config files that apply in the solution directory, closest first
+    public static ProcessStep NuGetConfigPaths(DotnetRepository repository)
+    {
+        return Step(name: "nuget config paths", repository: repository, arguments: ["nuget", "config", "paths"]);
+    }
+
     public static ProcessStep ToolRestore(DotnetRepository repository)
     {
         return RootStep(name: "tool restore", repository: repository, fileName: DOTNET, arguments: ["tool", "restore"]);

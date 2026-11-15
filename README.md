@@ -69,8 +69,9 @@ so the agent never composes a `cd`.
 
 ### Tools
 
-Every parameter is an enum or a pattern-checked job id. No tool takes a free-form argument string, and a value
-outside the enum is refused without anything being run.
+Every parameter is an enum, a pattern-checked id (a job id, or a NuGet package id), a flag or a bounded whole
+number. No tool takes a free-form argument string, and a value outside those bounds is refused without anything
+being run.
 
 The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerateSuppressionFile=true`,
 `-p:ContinuousIntegrationBuild=true`, `-p:IsProduction=false`, `-p:Optimize=true`,
@@ -79,6 +80,7 @@ The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerat
 | Tool | Parameters | What it does |
 | --- | --- | --- |
 | `detect` | none | The solution, its projects, the unit, integration and benchmark test projects, the timeout and any overrides error, detected afresh. |
+| `package_versions` | `package_id` (required, a NuGet package id); `include_prerelease`: `false` (default, release versions only) or `true`; `take`: 1 to 500, default 20 | Answers at once, no job. Runs `dotnet package search <id> --exact-match --format json [--prerelease]` from the solution directory with no `--source`, so the repository's NuGet.config hierarchy picks the sources, then reads the package source mapping from the files `dotnet nuget config paths` lists (the search itself ignores the mapping). Returns, for each source that lists the package, its newest `take` versions (newest first, NuGet ordering), the version count, the latest stable and prerelease version and `usedByRestore`; plus the overall latest stable and prerelease version from the sources restore would use, and any per-source problems. A package no source lists is a tool error. Use it instead of querying nuget.org, which misses private feeds and ignores the mapping; MSBuild SDK packages work the same way. |
 | `restore` | none | Starts `dotnet restore <solution>`. |
 | `build` | none | Starts `dotnet restore <solution>`, then `dotnet build <solution> -c Release --no-restore <buildtest properties> -nodeReuse:False` from the solution directory: the whole solution. |
 | `test` | `scope`: `all` (default) or `project`; `project`: one of the unit, integration or benchmark test projects | Runs the tests as pre-commit `buildtest` does: restore, build, then test with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8` and the `buildtest` properties. `all` builds the solution, then starts one `dotnet test --solution <solution>` run from the solution directory with `--filter-not-namespace` for `*.Integration.Tests`, `*.Integration.Tests.*`, `*.Benchmark.Tests` and `*.Benchmark.Tests.*`. `project` builds that project, then runs `dotnet test <Project>/<Project>.csproj ... -p:SolutionDir=<src>/` with no namespace filter. A failed restore or build ends the job, so the tests never run against stale binaries. |
@@ -90,7 +92,7 @@ The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerat
 | `job_status` | `id` | Whether the job is still running, how long it has run and which step it is on. |
 | `job_result` | `id` | The outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. |
 
-Every tool except `detect`, `job_status` and `job_result` starts a **job** and returns its id at once, so no MCP
+Every tool except `detect`, `package_versions`, `job_status` and `job_result` starts a **job** and returns its id at once, so no MCP
 call or Bash timeout applies to a long build. Poll `job_status` until `state` is no longer `running`, then read
 `job_result`. One job runs at a time; starting another while one is running is refused. A job is killed when it
 exceeds its timeout (30 minutes by default, `buildtest` included), and when the server shuts down.
