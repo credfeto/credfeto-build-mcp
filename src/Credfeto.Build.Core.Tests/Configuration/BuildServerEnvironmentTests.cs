@@ -241,18 +241,25 @@ public sealed class BuildServerEnvironmentTests : TestBase
     public static void EachPrivateFolderIsNewAndOwnerOnly()
     {
         string first = BuildServerEnvironment.CreatePrivateTemporaryFolder();
-        string second = BuildServerEnvironment.CreatePrivateTemporaryFolder();
 
         try
         {
-            Assert.NotEqual(expected: first, actual: second, comparer: StringComparer.Ordinal);
-            AssertPrivateFolder(first);
-            AssertPrivateFolder(second);
+            string second = BuildServerEnvironment.CreatePrivateTemporaryFolder();
+
+            try
+            {
+                Assert.NotEqual(expected: first, actual: second, comparer: StringComparer.Ordinal);
+                AssertPrivateFolder(first);
+                AssertPrivateFolder(second);
+            }
+            finally
+            {
+                Directory.Delete(second);
+            }
         }
         finally
         {
             Directory.Delete(first);
-            Directory.Delete(second);
         }
     }
 
@@ -263,7 +270,7 @@ public sealed class BuildServerEnvironmentTests : TestBase
         Assert.True(condition: info.Exists, userMessage: "The private folder should exist");
         Assert.Null(info.LinkTarget);
         Assert.Equal(
-            expected: Path.TrimEndingDirectorySeparator(Path.GetTempPath()),
+            expected: Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())),
             actual: info.Parent?.FullName,
             comparer: StringComparer.Ordinal
         );
