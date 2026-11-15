@@ -17,11 +17,20 @@ public sealed class DependencyInjectionTests : DependencyInjectionTestsBase
         Assert.NotNull(this.ServiceProvider.GetRequiredService<IJobRunner>());
         Assert.NotNull(this.ServiceProvider.GetRequiredService<IProcessLauncher>());
         Assert.NotNull(this.ServiceProvider.GetRequiredService<IOutputMasker>());
-        Assert.Equal(expected: "/work/repo", actual: this.ServiceProvider.GetRequiredService<BuildServerEnvironment>().RepositoryRoot);
+        Assert.Equal(
+            expected: "/work/repo",
+            actual: this.ServiceProvider.GetRequiredService<BuildServerEnvironment>().RepositoryRoot
+        );
     }
 
     private static IServiceCollection Configure(IServiceCollection services)
     {
-        return services.AddBuildCore(new(RepositoryRoot: "/work/repo", LogDirectory: "/work/logs"));
+        return services.AddBuildCore(
+            new(
+                RepositoryRoot: "/work/repo",
+                RepositoryRootSource: RepositoryRootSource.Variable,
+                LogDirectory: "/work/logs"
+            )
+        );
     }
 }

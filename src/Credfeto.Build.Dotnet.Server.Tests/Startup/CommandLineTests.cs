@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Core.Configuration.Exceptions;
 using FunFair.Test.Common;
 using Xunit;
@@ -12,17 +13,34 @@ public sealed class CommandLineTests : TestBase
 {
     private const int SERVED = 42;
 
+    private static readonly BuildServerEnvironment GitRootEnvironment = new(
+        RepositoryRoot: "/work/checkout",
+        RepositoryRootSource: RepositoryRootSource.GitRoot,
+        LogDirectory: "/work/logs"
+    );
+
+    private static readonly string RootLine =
+        "credfeto-build-dotnet: repository root /work/checkout (the git root of the current directory; BUILD_MCP_REPO_ROOT is not set and the default folder does not exist)"
+        + Environment.NewLine;
+
     [Fact]
     public async Task NoArgumentsServesWithTheCallersTokenAsync()
     {
         CancellationToken expected = this.CancellationToken();
 
-        (int exitCode, string output, string error, CancellationToken? served) = await this.RunAsync();
+        (int exitCode, _, _, CancellationToken? served) = await this.RunAsync();
 
         Assert.Equal(expected: SERVED, actual: exitCode);
         Assert.Equal(expected: expected, actual: served);
+    }
+
+    [Fact]
+    public async Task ServingLogsTheRepositoryRootOnStandardErrorOnlyAsync()
+    {
+        (_, string output, string error, _) = await this.RunAsync();
+
         Assert.Equal(expected: string.Empty, actual: output);
-        Assert.Equal(expected: string.Empty, actual: error);
+        Assert.Equal(expected: RootLine, actual: error);
     }
 
     [Theory]
@@ -73,21 +91,33 @@ public sealed class CommandLineTests : TestBase
         return this.AssertUsageErrorAsync(CommandLine.SELF_TEST, CommandLine.HELP);
     }
 
-    [Fact]
-    public async Task AConfigurationErrorIsReportedOnStandardErrorAsync()
+    [Theory]
+    [InlineData("")]
+    [InlineData(CommandLine.SELF_TEST)]
+    public async Task AConfigurationErrorIsReportedOnStandardErrorWithoutServingAsync(string argument)
     {
+        string[] arguments = argument.Length == 0 ? [] : [argument];
         await using StringWriter output = new();
         await using StringWriter error = new();
+        bool served = false;
 
         int exitCode = await CommandLine.RunAsync(
-            arguments: [],
+            arguments: arguments,
             output: output,
             error: error,
-            serve: static _ => throw new InvalidBuildConfigurationException("BUILD_MCP_REPO_ROOT is set to \"repo\""),
+            resolveEnvironment: static _ =>
+                throw new InvalidBuildConfigurationException("BUILD_MCP_REPO_ROOT is set to \"repo\""),
+            serve: (_, _) =>
+            {
+                served = true;
+
+                return ValueTask.FromResult(SERVED);
+            },
             cancellationToken: this.CancellationToken()
         );
 
         Assert.Equal(expected: CommandLine.CONFIGURATION_ERROR, actual: exitCode);
+        Assert.False(condition: served, userMessage: "The server should not start");
         Assert.Equal(expected: string.Empty, actual: output.ToString());
         Assert.Equal(
             expected: "BUILD_MCP_REPO_ROOT is set to \"repo\"" + Environment.NewLine,
@@ -125,8 +155,10 @@ public sealed class CommandLineTests : TestBase
             arguments: arguments,
             output: output,
             error: error,
-            serve: cancellationToken =>
+            resolveEnvironment: static _ => ValueTask.FromResult(GitRootEnvironment),
+            serve: (environment, cancellationToken) =>
             {
+                Assert.Same(expected: GitRootEnvironment, actual: environment);
                 served = cancellationToken;
 
                 return ValueTask.FromResult(SERVED);

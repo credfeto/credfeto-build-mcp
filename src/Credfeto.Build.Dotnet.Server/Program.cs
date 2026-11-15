@@ -19,13 +19,17 @@ public static class Program
                 arguments: args,
                 output: Console.Out,
                 error: Console.Error,
+                resolveEnvironment: BuildServerEnvironment.FromProcessAsync,
                 serve: ServeAsync,
                 cancellationToken: CancellationToken.None
             )
             .AsTask();
     }
 
-    private static async ValueTask<int> ServeAsync(CancellationToken cancellationToken)
+    private static async ValueTask<int> ServeAsync(
+        BuildServerEnvironment environment,
+        CancellationToken cancellationToken
+    )
     {
         // SIGTERM and Ctrl+C end the session cleanly, so a running job's process tree is killed rather than orphaned
         TaskCompletionSource signalled = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -39,7 +43,6 @@ public static class Program
         );
 
         using CancellationTokenSource shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        BuildServerEnvironment environment = BuildServerEnvironment.FromProcess();
         DotnetDetection detection = await DotnetDetector.DetectAsync(
             repositoryRoot: environment.RepositoryRoot,
             cancellationToken: shutdown.Token

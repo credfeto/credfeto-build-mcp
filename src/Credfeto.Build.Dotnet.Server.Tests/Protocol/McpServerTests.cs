@@ -76,6 +76,7 @@ public sealed class McpServerTests : TestBase
         using TemporaryDirectory repository = new();
         BuildServerEnvironment environment = new(
             RepositoryRoot: repository.Path,
+            RepositoryRootSource: RepositoryRootSource.Variable,
             LogDirectory: repository.Combine("logs")
         );
         DotnetDetection detection = await DotnetDetector.DetectAsync(
@@ -235,6 +236,7 @@ public sealed class McpServerTests : TestBase
         CancellationToken cancellationToken = this.CancellationToken();
         BuildServerEnvironment environment = new(
             RepositoryRoot: repository.Path,
+            RepositoryRootSource: RepositoryRootSource.Variable,
             LogDirectory: repository.Combine("logs")
         );
         DotnetDetection detection = await DotnetDetector.DetectAsync(

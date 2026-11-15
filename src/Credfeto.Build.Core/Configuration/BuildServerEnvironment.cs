@@ -3,12 +3,19 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Credfeto.Build.Core.Configuration.Exceptions;
+using Credfeto.Build.Core.Repository;
 
 namespace Credfeto.Build.Core.Configuration;
 
-[DebuggerDisplay("RepositoryRoot={RepositoryRoot}, LogDirectory={LogDirectory}")]
-public sealed record BuildServerEnvironment(string RepositoryRoot, string LogDirectory)
+[DebuggerDisplay("RepositoryRoot={RepositoryRoot} ({RepositoryRootSource}), LogDirectory={LogDirectory}")]
+public sealed record BuildServerEnvironment(
+    string RepositoryRoot,
+    RepositoryRootSource RepositoryRootSource,
+    string LogDirectory
+)
 {
     public const string REPOSITORY_ROOT_VARIABLE = "BUILD_MCP_REPO_ROOT";
     public const string LOG_DIRECTORY_VARIABLE = "BUILD_MCP_LOG_DIR";
@@ -20,23 +27,31 @@ public sealed record BuildServerEnvironment(string RepositoryRoot, string LogDir
     private const string LOGS_FOLDER = "logs";
     private const string PRIVATE_FOLDER_DESCRIPTION = "a new private folder in the temporary directory";
 
-    public static BuildServerEnvironment FromProcess()
+    public static ValueTask<BuildServerEnvironment> FromProcessAsync(CancellationToken cancellationToken)
     {
-        return Resolve(getVariable: ProcessVariable, createPrivateFolder: CreatePrivateTemporaryFolder);
+        return ResolveAsync(
+            getVariable: ProcessVariable,
+            createPrivateFolder: CreatePrivateTemporaryFolder,
+            defaultRepositoryRoot: DEFAULT_REPOSITORY_ROOT,
+            findGitRoot: FindWorkingDirectoryGitRootAsync,
+            cancellationToken: cancellationToken
+        );
     }
 
-    public static BuildServerEnvironment Resolve(Func<string, string?> getVariable, Func<string> createPrivateFolder)
+    public static async ValueTask<BuildServerEnvironment> ResolveAsync(
+        Func<string, string?> getVariable,
+        Func<string> createPrivateFolder,
+        string defaultRepositoryRoot,
+        Func<CancellationToken, ValueTask<string?>> findGitRoot,
+        CancellationToken cancellationToken
+    )
     {
-        // Only an unset variable gets the default: a value that is set but not absolute (relative, empty or whitespace)
-        // is a misconfiguration, and silently swapping it for the default would hide it
-        string? rootValue = getVariable(REPOSITORY_ROOT_VARIABLE);
-        string repositoryRoot = rootValue is null
-            ? Normalise(DEFAULT_REPOSITORY_ROOT)
-            : RequireAbsolute(
-                name: REPOSITORY_ROOT_VARIABLE,
-                value: rootValue,
-                defaultDescription: DEFAULT_REPOSITORY_ROOT
-            );
+        (string repositoryRoot, RepositoryRootSource source) = await ResolveRepositoryRootAsync(
+            value: getVariable(REPOSITORY_ROOT_VARIABLE),
+            defaultRepositoryRoot: defaultRepositoryRoot,
+            findGitRoot: findGitRoot,
+            cancellationToken: cancellationToken
+        );
 
         string logDirectory = ResolveLogDirectory(
             value: getVariable(LOG_DIRECTORY_VARIABLE),
@@ -44,7 +59,86 @@ public sealed record BuildServerEnvironment(string RepositoryRoot, string LogDir
             createPrivateFolder: createPrivateFolder
         );
 
-        return new(RepositoryRoot: repositoryRoot, LogDirectory: logDirectory);
+        return new(RepositoryRoot: repositoryRoot, RepositoryRootSource: source, LogDirectory: logDirectory);
+    }
+
+    public string DescribeRepositoryRoot()
+    {
+        string reason = this.RepositoryRootSource switch
+        {
+            RepositoryRootSource.Default => "the default; " + REPOSITORY_ROOT_VARIABLE + " is not set",
+            RepositoryRootSource.GitRoot => "the git root of the current directory; "
+                + REPOSITORY_ROOT_VARIABLE
+                + " is not set and the default folder does not exist",
+            _ => "from " + REPOSITORY_ROOT_VARIABLE,
+        };
+
+        return "repository root " + this.RepositoryRoot + " (" + reason + ")";
+    }
+
+    private static async ValueTask<(string Root, RepositoryRootSource Source)> ResolveRepositoryRootAsync(
+        string? value,
+        string defaultRepositoryRoot,
+        Func<CancellationToken, ValueTask<string?>> findGitRoot,
+        CancellationToken cancellationToken
+    )
+    {
+        // Only an unset variable gets a fallback: a value that is set but not absolute (relative, empty or whitespace)
+        // is a misconfiguration, and silently swapping it for the default would hide it
+        if (value is not null)
+        {
+            return (
+                RequireAbsolute(
+                    name: REPOSITORY_ROOT_VARIABLE,
+                    value: value,
+                    defaultDescription: defaultRepositoryRoot
+                        + " (or, when that does not exist, the git root of the current directory)"
+                ),
+                RepositoryRootSource.Variable
+            );
+        }
+
+        // The container mounts the repository at the default; git is only asked when that is missing, so the
+        // container start runs no process
+        if (Directory.Exists(defaultRepositoryRoot))
+        {
+            return (Normalise(defaultRepositoryRoot), RepositoryRootSource.Default);
+        }
+
+        string? gitRoot = await findGitRoot(cancellationToken);
+
+        return IsAbsolute(gitRoot)
+            ? (Normalise(gitRoot), RepositoryRootSource.GitRoot)
+            : throw new InvalidBuildConfigurationException(
+                REPOSITORY_ROOT_VARIABLE
+                    + " is not set, "
+                    + defaultRepositoryRoot
+                    + " does not exist and the current directory is not in a git checkout: set "
+                    + REPOSITORY_ROOT_VARIABLE
+                    + " to the repository's absolute path, or start the server inside the repository"
+            );
+    }
+
+    private static async ValueTask<string?> FindWorkingDirectoryGitRootAsync(CancellationToken cancellationToken)
+    {
+        string? directory = CurrentDirectory();
+
+        return directory is null
+            ? null
+            : await GitTopLevel.FindAsync(directory: directory, cancellationToken: cancellationToken);
+    }
+
+    private static string? CurrentDirectory()
+    {
+        try
+        {
+            return Environment.CurrentDirectory;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The directory the server started in has been removed or can't be read, so it is in no checkout
+            return null;
+        }
     }
 
     private static string ResolveLogDirectory(string? value, string? homeLogDirectory, Func<string> createPrivateFolder)
