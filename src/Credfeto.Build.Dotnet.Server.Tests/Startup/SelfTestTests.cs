@@ -19,6 +19,7 @@ public sealed class SelfTestTests : TestBase
         using TemporaryDirectory folder = new();
         BuildServerEnvironment environment = new(
             RepositoryRoot: folder.Combine("repo"),
+            RepositoryRootSource: RepositoryRootSource.Variable,
             LogDirectory: folder.Combine("logs")
         );
         await using StringWriter error = new();
@@ -40,6 +41,7 @@ public sealed class SelfTestTests : TestBase
         using TemporaryDirectory folder = new();
         BuildServerEnvironment environment = new(
             RepositoryRoot: folder.Combine("repo"),
+            RepositoryRootSource: RepositoryRootSource.Variable,
             LogDirectory: folder.Combine("logs")
         );
 

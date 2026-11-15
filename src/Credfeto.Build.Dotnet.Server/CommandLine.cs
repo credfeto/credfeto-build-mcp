@@ -23,16 +23,19 @@ public static class CommandLine
         "",
         "With no option, serves MCP over stdio for the repository in "
             + BuildServerEnvironment.REPOSITORY_ROOT_VARIABLE
-            + " (default "
+            + " (when unset, "
             + BuildServerEnvironment.DEFAULT_REPOSITORY_ROOT
-            + " when unset; a value that is not an absolute path is an error).",
+            + " if it exists, else the git root of the current directory; a value that is not an absolute path is an",
+        "error). The chosen repository root and where it came from are written to stderr at startup.",
         "",
         "Options:",
         "  "
             + SELF_TEST
             + "  Builds the service provider and resolves every dependency, then exits: 0 when that works, 1 with",
         "               a one-line reason on stderr when it does not. Starts no MCP transport, reads no input and opens",
-        "               no repository, file or network connection.",
+        "               no file or network connection; the repository is only located (git runs when "
+            + BuildServerEnvironment.REPOSITORY_ROOT_VARIABLE,
+        "               is unset and " + BuildServerEnvironment.DEFAULT_REPOSITORY_ROOT + " is missing), never read.",
         "  " + SHORT_HELP + ", " + HELP + "   Shows this help and exits."
     );
 
@@ -40,7 +43,8 @@ public static class CommandLine
         IReadOnlyList<string> arguments,
         TextWriter output,
         TextWriter error,
-        Func<CancellationToken, ValueTask<int>> serve,
+        Func<CancellationToken, ValueTask<BuildServerEnvironment>> resolveEnvironment,
+        Func<BuildServerEnvironment, CancellationToken, ValueTask<int>> serve,
         CancellationToken cancellationToken
     )
     {
@@ -50,6 +54,7 @@ public static class CommandLine
                 arguments: arguments,
                 output: output,
                 error: error,
+                resolveEnvironment: resolveEnvironment,
                 serve: serve,
                 cancellationToken: cancellationToken
             );
@@ -67,14 +72,20 @@ public static class CommandLine
         IReadOnlyList<string> arguments,
         TextWriter output,
         TextWriter error,
-        Func<CancellationToken, ValueTask<int>> serve,
+        Func<CancellationToken, ValueTask<BuildServerEnvironment>> resolveEnvironment,
+        Func<BuildServerEnvironment, CancellationToken, ValueTask<int>> serve,
         CancellationToken cancellationToken
     )
     {
         switch (arguments)
         {
             case []:
-                return await serve(cancellationToken);
+                return await ServeAsync(
+                    error: error,
+                    resolveEnvironment: resolveEnvironment,
+                    serve: serve,
+                    cancellationToken: cancellationToken
+                );
 
             case [HELP]
             or [SHORT_HELP]:
@@ -84,7 +95,7 @@ public static class CommandLine
 
             case [SELF_TEST]:
                 return await SelfTest.RunAsync(
-                    services: SelfTest.Services(BuildServerEnvironment.FromProcess()),
+                    services: SelfTest.Services(await resolveEnvironment(cancellationToken)),
                     error: error,
                     cancellationToken: cancellationToken
                 );
@@ -103,5 +114,23 @@ public static class CommandLine
 
                 return USAGE_ERROR;
         }
+    }
+
+    private static async ValueTask<int> ServeAsync(
+        TextWriter error,
+        Func<CancellationToken, ValueTask<BuildServerEnvironment>> resolveEnvironment,
+        Func<BuildServerEnvironment, CancellationToken, ValueTask<int>> serve,
+        CancellationToken cancellationToken
+    )
+    {
+        BuildServerEnvironment environment = await resolveEnvironment(cancellationToken);
+
+        // stderr only: stdout is the MCP stream
+        await error.WriteLineAsync(
+            buffer: (ServerOptionsFactory.SERVER_NAME + ": " + environment.DescribeRepositoryRoot()).AsMemory(),
+            cancellationToken: cancellationToken
+        );
+
+        return await serve(environment, cancellationToken);
     }
 }

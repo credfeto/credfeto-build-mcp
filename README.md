@@ -57,15 +57,21 @@ carries on without it; the per-call check still applies.
 
 ### Repository root
 
-The repository the server works on is **never** a tool argument. It is `BUILD_MCP_REPO_ROOT` when that is set, and
-`/workspace/repo` when it is unset. A value that is set but is not an absolute path (relative, empty or whitespace)
+The repository the server works on is **never** a tool argument. It is `BUILD_MCP_REPO_ROOT` when that is set. When it
+is unset, it is `/workspace/repo` if that folder exists (the agent container's mount), and otherwise the git top-level
+folder of the directory the server was started in (`git rev-parse --show-toplevel`; git is only run in that case). If the
+variable is unset, `/workspace/repo` is missing and the start directory is not in a git checkout (or git can't be run),
+the server stops at startup with exit code 1 and a message on stderr saying so. When serving, the server writes one line to stderr naming the
+chosen root and where it came from, for example
+`credfeto-build-dotnet: repository root /src/app (the git root of the current directory; BUILD_MCP_REPO_ROOT is not set and the default folder does not exist)`;
+stdout carries only MCP traffic. A value that is set but is not an absolute path (relative, empty or whitespace)
 stops the server at startup (and fails `--self-test`) with exit code 1 and a message on stderr naming the variable
 and the value; it is never swapped for the default. `BUILD_MCP_LOG_DIR` follows the same rule. Every command runs with a fixed working directory under that root,
 so the agent never composes a `cd`.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `BUILD_MCP_REPO_ROOT` | `/workspace/repo` | The repository to work on. Must be an absolute path when set; anything else is a startup error. |
+| `BUILD_MCP_REPO_ROOT` | `/workspace/repo` when it exists, else the git root of the start directory | The repository to work on. Must be an absolute path when set; anything else is a startup error. Unset with neither fallback available is a startup error too. |
 | `BUILD_MCP_LOG_DIR` | `$XDG_STATE_HOME/credfeto-build-mcp/logs`, else `~/.local/state/credfeto-build-mcp/logs`, else, when there is no home directory, a new private folder (`credfeto-build-mcp-<random>`, mode 0700) that the server creates in `$TMPDIR` at startup | Where each job writes its full log (`<job id>.log`, mode 0600) in a per-user folder with mode 0700. Must be an absolute path when set; anything else is a startup error. A relative `XDG_STATE_HOME` or `HOME` is ignored when choosing the default. The temporary-directory fallback gets a new random name each start, so another user can't create it first or put a symlink in its place; if it can't be created, startup fails with a message to set `BUILD_MCP_LOG_DIR`. |
 | `BUILD_MCP_BUILDTEST` | `buildtest` on `PATH` | The absolute path of the pre-commit `buildtest` script that the `buildtest` tool runs. When set to anything else (including empty) the `buildtest` tool fails with a message naming the variable. |
 
@@ -189,8 +195,10 @@ With no arguments the server serves MCP over stdio. It also takes one of these s
 
 - `--self-test`: builds the service provider and configuration and resolves every dependency, then exits: `0` when
   that works, `1` with a one-line `self-test failed: <reason>` on stderr when it does not. It starts no MCP transport,
-  reads no stdin, opens no network connection and does no repository or file work, so an image build can run
-  `credfeto-build-dotnet --self-test` to check the installed tool loads.
+  reads no stdin, opens no network connection and does no file work, so an image build can run
+  `credfeto-build-dotnet --self-test` to check the installed tool loads. The only repository work is locating the root
+  as serving does: with `BUILD_MCP_REPO_ROOT` unset and no `/workspace/repo` it asks git for the start directory's top
+  level, and fails outside a git checkout. It prints no repository root line when it passes.
 - `--help`, `-h`: lists the switches and exits with `0`.
 
 Any other argument, or more than one switch, prints a one-line error on stderr and exits with `2`.

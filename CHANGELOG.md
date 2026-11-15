@@ -19,6 +19,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - The default job log folder is now per-user ($XDG_STATE_HOME/credfeto-build-mcp/logs, else ~/.local/state/credfeto-build-mcp/logs, else a credfeto-build-mcp-<uid> folder in the temp directory) and is created owner-only (0700) when BUILD_MCP_LOG_DIR is unset, so users on a shared machine no longer share job logs (#17)
 - The solution builds again: long methods in the .NET server DotnetDetector and CleanupFileSelector are split into smaller methods to satisfy the MA0051 method-length analyzer (refactor only, no behaviour change) (#17)
 - With no `BUILD_MCP_LOG_DIR` and no absolute `XDG_STATE_HOME` or `HOME`, job logs now go to a new private folder that the server creates in the temporary directory at startup, with a random name and mode 0700, instead of the predictable credfeto-build-mcp-<uid> folder there, which another user could create first or replace with a symlink. If that folder can't be created, startup fails with a message to set `BUILD_MCP_LOG_DIR` (#19)
+- With `BUILD_MCP_REPO_ROOT` unset and no `/workspace/repo` folder, the server now uses the git top-level folder of the directory it was started in, and stops at startup with a clear stderr message (exit code 1) when that is not a git checkout, instead of serving a missing folder. At startup it writes the chosen repository root and its source (the variable, the default or the git root) to stderr, never stdout (#29)
 ### Changed
 - SDK - Updated DotNet SDK to 11.0.100
 ### Deprecated
