@@ -1,18 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <Authors>Mark Ridgwell</Authors>
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     <Company>Mark Ridgwell</Company>
-    <Copyright>Mark Ridgwell</Copyright>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <Copyright>Mark Ridgwell</Copyright>
     <DebuggerSupport>true</DebuggerSupport>
     <Description>Credfeto Build MCP .NET server: restore, build, test and coverage over stdio MCP</Description>
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <EnableAotAnalyzer>true</EnableAotAnalyzer>
     <EnablePackageValidation>true</EnablePackageValidation>
     <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
@@ -28,8 +28,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <IncludeSymbols>false</IncludeSymbols>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
+    <IsPackable>true</IsPackable>
     <IsPublishable>true</IsPublishable>
     <IsTrimmable>true</IsTrimmable>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
@@ -65,12 +65,14 @@
     <ValidateExecutableReferencesMatchSelfContained>true</ValidateExecutableReferencesMatchSelfContained>
     <WarningsAsErrors />
   </PropertyGroup>
+  <Import Project="../NativeAotTool.targets" />
+  <ItemGroup>
+    <ProjectReference Include="../Credfeto.Build.Core/Credfeto.Build.Core.csproj" />
+    <ProjectReference Include="../Credfeto.Build.Server/Credfeto.Build.Server.csproj" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" IncludeAssets="compile;runtime" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.3.0" IncludeAssets="compile;runtime" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="../Credfeto.Build.Core/Credfeto.Build.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="AsyncFixer" Version="2.1.0" PrivateAssets="All" ExcludeAssets="runtime" />
@@ -88,28 +90,4 @@
     <PackageReference Include="SourceLink.Create.CommandLine" Version="2.8.3" PrivateAssets="All" ExcludeAssets="runtime" />
     <PackageReference Include="ToStringWithoutOverrideAnalyzer" Version="0.6.0" PrivateAssets="All" ExcludeAssets="runtime" />
   </ItemGroup>
-  <!-- Native AOT: managed symbols of referenced projects are useless next to the native binary, keep them out of the tool package -->
-  <Target Name="_RemoveManagedSymbolsFromPublish" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(PublishAot)' == 'true'">
-    <ItemGroup>
-      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
-    </ItemGroup>
-  </Target>
-  <!--
-    Native AOT tool: a plain (RID-less) `dotnet pack` only makes the pointer package. The SDK's _CreateRIDSpecificToolPackages
-    skips the RID-specific packages when the inner builds are AOT (_InnerToolsPublishAot), because AOT can't cross-compile.
-    Pack them here instead, under the same condition the SDK skips them, so CI's plain pack writes the pointer package and
-    every ToolPackageRuntimeIdentifiers package to the same folder. The inner packs inherit the outer pack's global properties
-    (Configuration, Version, PackageOutputPath, ...) and environment (ReleaseNotes). Each RID must be AOT-buildable on the host.
-  -->
-  <Target Name="_PackAotRidSpecificToolPackages" AfterTargets="Pack" Condition="'$(RuntimeIdentifier)' == '' and '$(PackAsTool)' == 'true' and '$(CreateRidSpecificToolPackages)' == 'true' and '$(_InnerToolsPublishAot)' == 'true'">
-    <PropertyGroup>
-      <_AotToolPackageRids>$(ToolPackageRuntimeIdentifiers)</_AotToolPackageRids>
-      <_AotToolPackageRids Condition="'$(_AotToolPackageRids)' == ''">$(RuntimeIdentifiers)</_AotToolPackageRids>
-    </PropertyGroup>
-    <ItemGroup>
-      <_AotToolPackageRid Include="$(_AotToolPackageRids)" />
-      <_AotToolPackageProject Include="$(MSBuildProjectFullPath)" AdditionalProperties="RuntimeIdentifier=%(_AotToolPackageRid.Identity)" />
-    </ItemGroup>
-    <MSBuild Projects="@(_AotToolPackageProject)" Targets="Pack" />
-  </Target>
 </Project>

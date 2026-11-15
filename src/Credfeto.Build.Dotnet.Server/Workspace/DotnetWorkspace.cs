@@ -1,25 +1,27 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
-using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Quality;
 using Credfeto.Build.Dotnet.Server.Tools;
+using Credfeto.Build.Server.Commands;
+using Credfeto.Build.Server.Workspace;
 using ModelContextProtocol.Server;
 
 namespace Credfeto.Build.Dotnet.Server.Workspace;
 
-public sealed class DotnetWorkspace : IDotnetDetectionSource, IDisposable
+public sealed class DotnetWorkspace : IDotnetDetectionSource, IRepositoryChangeHandler, IDisposable
 {
-    private readonly ToolContext _context;
-    private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
-    private readonly string _repositoryRoot;
-    private DotnetDetection _current;
-    private string _signature;
+    // Solutions, projects and the overrides file decide what detection finds; build output and git internals never do
+    public static readonly WatchFilter WatchedFiles = new(
+        Extensions: [".csproj", ".sln", ".slnx"],
+        IgnoredDirectories: ["bin", "obj", ".git"]
+    );
+
+    private readonly LanguageWorkspace<DotnetDetection> _workspace;
 
     public DotnetWorkspace(
         DotnetDetection initial,
@@ -28,70 +30,35 @@ public sealed class DotnetWorkspace : IDotnetDetectionSource, IDisposable
         BuildtestLocator buildtest
     )
     {
-        this._repositoryRoot = initial.RepositoryRoot;
-        this._current = initial;
-        this._signature = Signature(initial);
-        this._context = new(runner: runner, commands: commands, detection: this, buildtest: buildtest);
-        this.Tools = [];
-
-        foreach (McpServerTool tool in DotnetToolCatalog.Create(detection: initial, context: this._context))
-        {
-            this.Tools.Add(tool);
-        }
+        ToolContext context = new(runner: runner, commands: commands, detection: this, buildtest: buildtest);
+        this._workspace = new(
+            initial: initial,
+            language: new DotnetWorkspaceLanguage(repositoryRoot: initial.RepositoryRoot, context: context)
+        );
     }
 
-    public McpServerPrimitiveCollection<McpServerTool> Tools { get; }
+    public McpServerPrimitiveCollection<McpServerTool> Tools => this._workspace.Tools;
 
-    public DotnetDetection Current => Volatile.Read(ref this._current);
+    public DotnetDetection Current => this._workspace.Current;
 
     public void Dispose()
     {
-        this._gate.Dispose();
+        this._workspace.Dispose();
     }
 
-    public async ValueTask<DotnetDetection> RefreshAsync(CancellationToken cancellationToken)
+    public ValueTask<DotnetDetection> RefreshAsync(CancellationToken cancellationToken)
     {
-        await this._gate.WaitAsync(cancellationToken);
-
-        try
-        {
-            DotnetDetection fresh = await DotnetDetector.DetectAsync(
-                repositoryRoot: this._repositoryRoot,
-                cancellationToken: cancellationToken
-            );
-            string signature = Signature(fresh);
-
-            // Only one refresh runs at a time, so the signature needs no other lock
-            if (StringComparer.Ordinal.Equals(x: signature, y: this._signature))
-            {
-                return fresh;
-            }
-
-            this._signature = signature;
-            Volatile.Write(location: ref this._current, value: fresh);
-            this.Replace(fresh);
-
-            return fresh;
-        }
-        finally
-        {
-            this._gate.Release();
-        }
+        return this._workspace.RefreshAsync(cancellationToken);
     }
 
-    private void Replace(DotnetDetection detection)
+    public ValueTask RepositoryChangedAsync(CancellationToken cancellationToken)
     {
-        IReadOnlyList<McpServerTool> tools = DotnetToolCatalog.Create(detection: detection, context: this._context);
+        return this._workspace.RepositoryChangedAsync(cancellationToken);
+    }
 
-        using (this.Tools.DeferChangedEvents())
-        {
-            this.Tools.Clear();
-
-            foreach (McpServerTool tool in tools)
-            {
-                this.Tools.Add(tool);
-            }
-        }
+    public bool IsTransientFailure(Exception exception)
+    {
+        return this._workspace.IsTransientFailure(exception);
     }
 
     public static string Signature(DotnetDetection detection)

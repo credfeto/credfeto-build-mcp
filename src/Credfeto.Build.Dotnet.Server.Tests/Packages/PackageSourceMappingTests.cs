@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Credfeto.Build.Dotnet.Server.Packages;
-using Credfeto.Build.Dotnet.Server.Tests.Helpers;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 

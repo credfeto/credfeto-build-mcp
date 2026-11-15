@@ -36,6 +36,8 @@
   <ItemGroup>
     <ProjectReference Include="../Credfeto.Build.Core/Credfeto.Build.Core.csproj" />
     <ProjectReference Include="../Credfeto.Build.Dotnet.Server/Credfeto.Build.Dotnet.Server.csproj" />
+    <ProjectReference Include="../Credfeto.Build.Server/Credfeto.Build.Server.csproj" />
+    <ProjectReference Include="../Credfeto.Build.Testing/Credfeto.Build.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FunFair.Test.Common" Version="6.4.6.2749" IncludeAssets="compile;runtime" />

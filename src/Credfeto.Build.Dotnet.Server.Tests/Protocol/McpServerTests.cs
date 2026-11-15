@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Tests.Helpers;
+using Credfeto.Build.Server;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;

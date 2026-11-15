@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Credfeto.Build.Core.Jobs;
-using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Quality;
 using Credfeto.Build.Dotnet.Server.Tools;
+using Credfeto.Build.Server.Commands;
+using Credfeto.Build.Server.Tools;
 using ModelContextProtocol.Server;
 
 namespace Credfeto.Build.Dotnet.Server.Tests.Helpers;

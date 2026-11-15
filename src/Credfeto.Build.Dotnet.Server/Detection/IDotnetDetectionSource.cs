@@ -1,10 +1,6 @@
-using System.Threading;
-using System.Threading.Tasks;
+using Credfeto.Build.Server.Workspace;
 
 namespace Credfeto.Build.Dotnet.Server.Detection;
 
-public interface IDotnetDetectionSource
-{
-    /// <summary>Detects .NET in the repository afresh, as it is now.</summary>
-    ValueTask<DotnetDetection> RefreshAsync(CancellationToken cancellationToken);
-}
+// Detects .NET in the repository afresh, as it is now
+public interface IDotnetDetectionSource : IDetectionSource<DotnetDetection>;

@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Dotnet.Server.Tests.Helpers;
-using Credfeto.Build.Dotnet.Server.Tools;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;

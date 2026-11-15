@@ -10,6 +10,7 @@ using Credfeto.Build.Core.Jobs.Exceptions;
 using Credfeto.Build.Core.Jobs.Services;
 using Credfeto.Build.Core.Tests.Coverage;
 using Credfeto.Build.Core.Tests.Helpers;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -709,8 +710,8 @@ public sealed class JobRunnerTests : TestBase, IDisposable
 
         public ValueTask WriteLateAsync(string line)
         {
-            Func<string, ValueTask> onOutputLine =
-                this._onOutputLine ?? throw new InvalidOperationException("The step never ran");
+            Func<string, ValueTask> onOutputLine = this._onOutputLine
+                ?? throw new InvalidOperationException("The step never ran");
 
             return onOutputLine(line);
         }

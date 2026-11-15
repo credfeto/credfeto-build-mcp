@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using Credfeto.Build.Core.Repository;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Quality;
 

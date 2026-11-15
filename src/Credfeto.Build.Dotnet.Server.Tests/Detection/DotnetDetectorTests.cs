@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Credfeto.Build.Core.Overrides;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Tests.Helpers;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 
@@ -46,9 +47,8 @@ public sealed class DotnetDetectorTests : TestBase
             expected: DotnetProjectKind.Project,
             actual: Kind(detected: detected, name: "Example.Mocks.Tests")
         );
-        Assert.DoesNotContain(
-            collection: detected.Projects,
-            filter: static project => StringComparer.Ordinal.Equals(x: project.Name, y: "Example.Missing.Tests")
+        Assert.DoesNotContain(collection: detected.Projects, filter: static project =>
+            StringComparer.Ordinal.Equals(x: project.Name, y: "Example.Missing.Tests")
         );
         Assert.Equal(expected: TimeSpan.FromMinutes(30), actual: detected.Timeout);
     }

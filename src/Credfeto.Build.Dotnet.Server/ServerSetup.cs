@@ -2,10 +2,11 @@ using System;
 using Credfeto.Build.Core;
 using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Core.Jobs;
-using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Quality;
 using Credfeto.Build.Dotnet.Server.Workspace;
+using Credfeto.Build.Server.Commands;
+using Credfeto.Build.Server.Workspace;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
 
@@ -48,6 +49,7 @@ public static class ServerSetup
             .AddSingleton(provider => new RepositoryWatcher(
                 repositoryRoot: environment.RepositoryRoot,
                 source: provider.GetRequiredService<DotnetWorkspace>(),
+                filter: DotnetWorkspace.WatchedFiles,
                 timeProvider: provider.GetRequiredService<TimeProvider>(),
                 debounce: debounce
             ))

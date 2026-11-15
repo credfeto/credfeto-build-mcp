@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
+using Credfeto.Build.Server.Tools;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
@@ -30,7 +31,8 @@ public sealed class BuildSolutionTool : BuildTool
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.BUILD,
             steps: [DotnetCommands.Restore(repository), DotnetCommands.Build(repository)],
             testParser: null,

@@ -8,17 +8,13 @@ using Credfeto.Build.Core.Repository;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Quality;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
-/// <summary>
-///     Runs the repository's formatter (dotnet cscleanup) on the changed or all .cs files, and reports in
-///     job_result which of them it changed.
-/// </summary>
 public sealed class CleanupTool : BuildTool
 {
-    /// <summary>Files per cscleanup run, so a whole-repository run never meets the argument length limit.</summary>
     public const int FILES_PER_STEP = 200;
 
     private readonly ToolContext _context;
@@ -40,7 +36,10 @@ public sealed class CleanupTool : BuildTool
         this._scope = scope;
     }
 
-    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        CancellationToken cancellationToken
+    )
     {
         string scope = arguments.GetChoice(this._scope) ?? CleanupFileSelector.SCOPE_CHANGED;
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
@@ -62,7 +61,9 @@ public sealed class CleanupTool : BuildTool
             throw new ToolUnavailableException(
                 selection.BaseReference is null
                     ? "There are no tracked .cs files to clean up"
-                    : "No .cs files have changed against " + selection.BaseReference + ", so there is nothing to clean up"
+                    : "No .cs files have changed against "
+                        + selection.BaseReference
+                        + ", so there is nothing to clean up"
             );
         }
 
@@ -74,7 +75,8 @@ public sealed class CleanupTool : BuildTool
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.CLEANUP,
             steps: [DotnetCommands.ToolRestore(repository), .. Steps(repository: repository, files: selection.Files)],
             testParser: null,
@@ -95,12 +97,16 @@ public sealed class CleanupTool : BuildTool
 
         return
         [
-            .. batches.Select((batch, index) =>
-                DotnetCommands.Cleanup(
-                    repository: repository,
-                    name: "cscleanup " + (index + 1).ToString(CultureInfo.InvariantCulture) + "/" + batches.Length.ToString(CultureInfo.InvariantCulture),
-                    files: batch
-                )
+            .. batches.Select(
+                (batch, index) =>
+                    DotnetCommands.Cleanup(
+                        repository: repository,
+                        name: "cscleanup "
+                            + (index + 1).ToString(CultureInfo.InvariantCulture)
+                            + "/"
+                            + batches.Length.ToString(CultureInfo.InvariantCulture),
+                        files: batch
+                    )
             ),
         ];
     }

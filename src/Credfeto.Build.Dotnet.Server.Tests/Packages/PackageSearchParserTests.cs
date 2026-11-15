@@ -2,7 +2,7 @@ using System;
 using System.Text.Json;
 using Credfeto.Build.Dotnet.Server.Models;
 using Credfeto.Build.Dotnet.Server.Packages;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools.Exceptions;
 using FunFair.Test.Common;
 using Xunit;
 

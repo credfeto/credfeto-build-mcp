@@ -1,10 +1,9 @@
 using System.IO;
 using Credfeto.Build.Dotnet.Server.Detection;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Quality;
 
-/// <summary>The repository's .NET tool manifest, which every quality tool runs its tool from.</summary>
 public static class ToolManifest
 {
     public static bool Exists(string repositoryRoot)
@@ -18,7 +17,9 @@ public static class ToolManifest
         if (!Exists(repository.RepositoryRoot))
         {
             throw new ToolUnavailableException(
-                "The repository has no .NET tool manifest (.config/dotnet-tools.json or dotnet-tools.json), so dotnet " + tool + " cannot be run from it"
+                "The repository has no .NET tool manifest (.config/dotnet-tools.json or dotnet-tools.json), so dotnet "
+                    + tool
+                    + " cannot be run from it"
             );
         }
     }
