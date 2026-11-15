@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Core.Configuration.Exceptions;
 using FunFair.Test.Common;
 using Xunit;
 
@@ -70,6 +71,28 @@ public sealed class CommandLineTests : TestBase
     public Task MoreThanOneSwitchIsAUsageErrorAsync()
     {
         return this.AssertUsageErrorAsync(CommandLine.SELF_TEST, CommandLine.HELP);
+    }
+
+    [Fact]
+    public async Task AConfigurationErrorIsReportedOnStandardErrorAsync()
+    {
+        await using StringWriter output = new();
+        await using StringWriter error = new();
+
+        int exitCode = await CommandLine.RunAsync(
+            arguments: [],
+            output: output,
+            error: error,
+            serve: static _ => throw new InvalidBuildConfigurationException("BUILD_MCP_REPO_ROOT is set to \"repo\""),
+            cancellationToken: this.CancellationToken()
+        );
+
+        Assert.Equal(expected: CommandLine.CONFIGURATION_ERROR, actual: exitCode);
+        Assert.Equal(expected: string.Empty, actual: output.ToString());
+        Assert.Equal(
+            expected: "BUILD_MCP_REPO_ROOT is set to \"repo\"" + Environment.NewLine,
+            actual: error.ToString()
+        );
     }
 
     private async Task AssertUsageErrorAsync(params string[] arguments)

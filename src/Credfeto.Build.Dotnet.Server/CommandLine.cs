@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Configuration;
+using Credfeto.Build.Core.Configuration.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server;
 
@@ -13,6 +14,7 @@ public static class CommandLine
     public const string SHORT_HELP = "-h";
     public const string SELF_TEST = "--self-test";
     public const int SUCCESS = 0;
+    public const int CONFIGURATION_ERROR = 1;
     public const int USAGE_ERROR = 2;
 
     public static readonly string Usage = string.Join(
@@ -23,7 +25,7 @@ public static class CommandLine
             + BuildServerEnvironment.REPOSITORY_ROOT_VARIABLE
             + " (default "
             + BuildServerEnvironment.DEFAULT_REPOSITORY_ROOT
-            + ").",
+            + " when unset; a value that is not an absolute path is an error).",
         "",
         "Options:",
         "  "
@@ -35,6 +37,33 @@ public static class CommandLine
     );
 
     public static async ValueTask<int> RunAsync(
+        IReadOnlyList<string> arguments,
+        TextWriter output,
+        TextWriter error,
+        Func<CancellationToken, ValueTask<int>> serve,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            return await DispatchAsync(
+                arguments: arguments,
+                output: output,
+                error: error,
+                serve: serve,
+                cancellationToken: cancellationToken
+            );
+        }
+        catch (InvalidBuildConfigurationException exception)
+        {
+            // stderr only: stdout is the MCP stream
+            await error.WriteLineAsync(buffer: exception.Message.AsMemory(), cancellationToken: cancellationToken);
+
+            return CONFIGURATION_ERROR;
+        }
+    }
+
+    private static async ValueTask<int> DispatchAsync(
         IReadOnlyList<string> arguments,
         TextWriter output,
         TextWriter error,

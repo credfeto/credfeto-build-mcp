@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using Credfeto.Build.Core.Configuration.Exceptions;
 
 namespace Credfeto.Build.Core.Configuration;
 
@@ -27,10 +28,12 @@ public sealed record BuildServerEnvironment(string RepositoryRoot, string LogDir
     public static BuildServerEnvironment Resolve(Func<string, string?> getVariable, Func<string> currentUser)
     {
         string repositoryRoot = AbsoluteOrDefault(
+            name: REPOSITORY_ROOT_VARIABLE,
             value: getVariable(REPOSITORY_ROOT_VARIABLE),
             fallback: DEFAULT_REPOSITORY_ROOT
         );
         string logDirectory = AbsoluteOrDefault(
+            name: LOG_DIRECTORY_VARIABLE,
             value: getVariable(LOG_DIRECTORY_VARIABLE),
             fallback: DefaultLogDirectory(getVariable: getVariable, currentUser: currentUser)
         );
@@ -107,10 +110,28 @@ public sealed record BuildServerEnvironment(string RepositoryRoot, string LogDir
         return !string.IsNullOrWhiteSpace(value) && Path.IsPathFullyQualified(value);
     }
 
-    private static string AbsoluteOrDefault(string? value, string fallback)
+    private static string AbsoluteOrDefault(string name, string? value, string fallback)
     {
-        string chosen = IsAbsolute(value) ? value : fallback;
+        // Only an unset variable gets the default: a value that is set but not absolute (relative, empty or
+        // whitespace) is a misconfiguration, and silently swapping it for the default would hide it
+        if (value is null)
+        {
+            return Normalise(fallback);
+        }
 
-        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(chosen));
+        return IsAbsolute(value)
+            ? Normalise(value)
+            : throw new InvalidBuildConfigurationException(
+                name
+                    + " is set to \""
+                    + value
+                    + "\", which is not an absolute path: set it to an absolute path, or unset it to use "
+                    + Normalise(fallback)
+            );
+    }
+
+    private static string Normalise(string path)
+    {
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
     }
 }
