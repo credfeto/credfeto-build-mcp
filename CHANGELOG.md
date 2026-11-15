@@ -22,6 +22,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - With `BUILD_MCP_REPO_ROOT` unset and no `/workspace/repo` folder, the server now uses the git top-level folder of the directory it was started in, and stops at startup with a clear stderr message (exit code 1) when that is not a git checkout, instead of serving a missing folder. At startup it writes the chosen repository root and its source (the variable, the default or the git root) to stderr, never stdout (#29)
 ### Changed
 - SDK - Updated DotNet SDK to 11.0.100
+- The language-neutral MCP server infrastructure (command line and self-test, stdio host, live tool list, repository watcher, job tools, argument and schema helpers, tool errors and the command runner) moved from the .NET server into a new shared `Credfeto.Build.Server` library, and the shared test helpers into `Credfeto.Build.Testing`, ready for a second language server; the .NET server's tools, schemas, output and start-up are unchanged (#32)
 ### Deprecated
 ### Removed
 ### Deployment Changes

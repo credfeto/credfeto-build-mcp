@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Credfeto.Build.Dotnet.Server.Detection;
+using Credfeto.Build.Server.Tools;
 using ModelContextProtocol.Server;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;

@@ -2,12 +2,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
+using Credfeto.Build.Server.Tools;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
-/// <summary>
-///     Runs the installed pre-commit buildtest script itself, so the tool always does what pre-commit checks.
-/// </summary>
 public sealed class BuildtestTool : BuildTool
 {
     private readonly ToolContext _context;
@@ -24,14 +22,18 @@ public sealed class BuildtestTool : BuildTool
         this._context = context;
     }
 
-    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        CancellationToken cancellationToken
+    )
     {
         string script = this._context.Buildtest.Require();
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.BUILDTEST,
             steps: [DotnetCommands.Buildtest(repository: repository, script: script)],
             testParser: null,

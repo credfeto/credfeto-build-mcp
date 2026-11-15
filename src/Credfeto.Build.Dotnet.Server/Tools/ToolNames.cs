@@ -1,3 +1,5 @@
+using Credfeto.Build.Server.Tools;
+
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
 public static class ToolNames
@@ -12,6 +14,6 @@ public static class ToolNames
     public const string CLEANUP = "cleanup";
     public const string CHANGELOG_LINT = "changelog_lint";
     public const string BUILDTEST = "buildtest";
-    public const string JOB_STATUS = "job_status";
-    public const string JOB_RESULT = "job_result";
+    public const string JOB_STATUS = JobToolNames.JOB_STATUS;
+    public const string JOB_RESULT = JobToolNames.JOB_RESULT;
 }

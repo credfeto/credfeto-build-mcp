@@ -1,6 +1,6 @@
-using System.Reflection;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Workspace;
+using Credfeto.Build.Server;
 using ModelContextProtocol.Server;
 
 namespace Credfeto.Build.Dotnet.Server;
@@ -11,16 +11,12 @@ public static class ServerOptionsFactory
 
     public static McpServerOptions Create(DotnetWorkspace workspace)
     {
-        return new()
-        {
-            ServerInfo = new() { Name = SERVER_NAME, Version = Version() },
-            ServerInstructions = Instructions(workspace.Current),
-
-            // The live collection, always set even when empty, so tools/list answers with no tools rather than an
-            // unknown-method error, and a change to it is sent to the client as notifications/tools/list_changed
-            Capabilities = new() { Tools = new() { ListChanged = true } },
-            ToolCollection = workspace.Tools,
-        };
+        return McpServerOptionsFactory.Create(
+            name: SERVER_NAME,
+            versionSource: typeof(ServerOptionsFactory).Assembly,
+            instructions: Instructions(workspace.Current),
+            tools: workspace.Tools
+        );
     }
 
     private static string Instructions(DotnetDetection detection)
@@ -34,13 +30,5 @@ public static class ServerOptionsFactory
             : "Builds, tests, checks and measures coverage for the .NET solution in "
                 + detection.RepositoryRoot
                 + ". Every tool except detect, package_versions, job_status and job_result starts a job and returns its id at once: poll job_status until the state is no longer running, then read job_result. One job runs at a time. The tool list follows the repository: when projects are added or removed the server sends notifications/tools/list_changed.";
-    }
-
-    private static string Version()
-    {
-        return typeof(ServerOptionsFactory)
-            .Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
-            ?.InformationalVersion
-            ?? "0.0.0";
     }
 }

@@ -16,7 +16,9 @@ that speaks MCP over stdio.
 | Project | What it is |
 | --- | --- |
 | `Credfeto.Build.Core` | The shared core (AOT-compatible library): the job runner, repository helpers, Cobertura parsing and the `.ai/commands.json` overrides. |
+| `Credfeto.Build.Server` | The language-neutral MCP server infrastructure every server shares (AOT-compatible library, not packed on its own): the command line and self-test, the stdio host, the live tool list that follows the repository, the repository watcher, the `job_status`/`job_result` tools, the tool argument and schema helpers, the tool errors and the short command runner. |
 | `Credfeto.Build.Dotnet.Server` | The `.NET` server (`credfeto-build-dotnet`), a Native AOT executable. |
+| `Credfeto.Build.Testing` | Test support shared by the test projects: temporary directories, isolated git, a recording job runner and a minimal MCP client. |
 | `*.Tests` | Unit tests for each of the above. |
 
 ## The .NET server
@@ -206,9 +208,9 @@ Any other argument, or more than one switch, prints a one-line error on stderr a
 ### Packing, publishing and start-up time
 
 For a Native AOT tool the SDK on its own packs only the pointer package from a plain `dotnet pack`, and skips the
-RID-specific packages (it can't AOT-compile other RIDs from the outer pack). The server project adds a
-`_PackAotRidSpecificToolPackages` target that runs after `Pack` and packs each RID in `ToolPackageRuntimeIdentifiers`
-with the same version and output folder, so the plain pack that CI runs produces both
+RID-specific packages (it can't AOT-compile other RIDs from the outer pack). `src/NativeAotTool.targets`, which the
+server project imports, adds a `_PackAotRidSpecificToolPackages` target that runs after `Pack` and packs each RID in
+`ToolPackageRuntimeIdentifiers` with the same version and output folder, so the plain pack that CI runs produces both
 `Credfeto.Build.Dotnet.Server.<version>.nupkg` and `Credfeto.Build.Dotnet.Server.linux-x64.<version>.nupkg`:
 
 ```bash

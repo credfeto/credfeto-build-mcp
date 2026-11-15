@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Core.Configuration.Exceptions;
-using Credfeto.Build.Core.Tests.Helpers;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 

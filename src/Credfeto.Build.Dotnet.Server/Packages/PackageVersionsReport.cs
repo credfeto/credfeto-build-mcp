@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Credfeto.Build.Dotnet.Server.Models;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Packages;
 

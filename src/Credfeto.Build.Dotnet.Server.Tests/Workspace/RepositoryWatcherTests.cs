@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Tests.Helpers;
 using Credfeto.Build.Dotnet.Server.Workspace;
+using Credfeto.Build.Server.Workspace;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 
@@ -29,6 +31,7 @@ public sealed class RepositoryWatcherTests : TestBase, IDisposable
         await using RepositoryWatcher watcher = new(
             repositoryRoot: this._repository.Path,
             source: workspace,
+            filter: DotnetWorkspace.WatchedFiles,
             timeProvider: TimeProvider.System,
             debounce: Debounce
         );
@@ -61,6 +64,7 @@ public sealed class RepositoryWatcherTests : TestBase, IDisposable
         await using RepositoryWatcher watcher = new(
             repositoryRoot: this._repository.Combine("missing"),
             source: workspace,
+            filter: DotnetWorkspace.WatchedFiles,
             timeProvider: TimeProvider.System,
             debounce: Debounce
         );
@@ -82,6 +86,7 @@ public sealed class RepositoryWatcherTests : TestBase, IDisposable
         await using RepositoryWatcher watcher = new(
             repositoryRoot: this._repository.Path,
             source: workspace,
+            filter: DotnetWorkspace.WatchedFiles,
             timeProvider: TimeProvider.System,
             debounce: Debounce
         );
@@ -104,6 +109,7 @@ public sealed class RepositoryWatcherTests : TestBase, IDisposable
         await using RepositoryWatcher watcher = new(
             repositoryRoot: this._repository.Path,
             source: workspace,
+            filter: DotnetWorkspace.WatchedFiles,
             timeProvider: TimeProvider.System,
             debounce: Debounce
         );

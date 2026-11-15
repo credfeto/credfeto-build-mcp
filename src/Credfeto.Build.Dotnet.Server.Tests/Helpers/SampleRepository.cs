@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Testing;
 
 namespace Credfeto.Build.Dotnet.Server.Tests.Helpers;
 

@@ -4,7 +4,8 @@ using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Quality;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
@@ -24,19 +25,25 @@ public sealed class ChangelogLintTool : BuildTool
         this._context = context;
     }
 
-    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        CancellationToken cancellationToken
+    )
     {
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
         ToolManifest.Require(repository: repository, tool: "changelog");
 
         if (!File.Exists(DotnetCommands.ChangelogPath(repository)))
         {
-            throw new ToolUnavailableException("The repository has no " + DotnetCommands.CHANGELOG_FILE + " at its root");
+            throw new ToolUnavailableException(
+                "The repository has no " + DotnetCommands.CHANGELOG_FILE + " at its root"
+            );
         }
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.CHANGELOG_LINT,
             steps: [DotnetCommands.ToolRestore(repository), DotnetCommands.ChangelogLint(repository)],
             testParser: null,

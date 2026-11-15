@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Repository;
-using Credfeto.Build.Core.Tests.Helpers;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 

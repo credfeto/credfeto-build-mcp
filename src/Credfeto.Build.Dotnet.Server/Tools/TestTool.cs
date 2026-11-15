@@ -7,7 +7,8 @@ using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Testing;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
@@ -48,7 +49,8 @@ public sealed class TestTool : BuildTool
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.TEST,
             steps: Steps(repository: repository, scope: scope, project: project),
             testParser: new MtpTestOutputParser(),

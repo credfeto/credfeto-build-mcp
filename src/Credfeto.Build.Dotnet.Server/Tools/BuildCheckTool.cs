@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Quality;
+using Credfeto.Build.Server.Tools;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
@@ -31,7 +32,10 @@ public sealed class BuildCheckTool : BuildTool
         this._mode = mode;
     }
 
-    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        CancellationToken cancellationToken
+    )
     {
         string mode = arguments.GetChoice(this._mode) ?? MODE_PRE_RELEASE;
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
@@ -39,12 +43,16 @@ public sealed class BuildCheckTool : BuildTool
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.BUILDCHECK,
             steps:
             [
                 DotnetCommands.ToolRestore(repository),
-                DotnetCommands.BuildCheck(repository: repository, preRelease: StringComparer.Ordinal.Equals(x: mode, y: MODE_PRE_RELEASE)),
+                DotnetCommands.BuildCheck(
+                    repository: repository,
+                    preRelease: StringComparer.Ordinal.Equals(x: mode, y: MODE_PRE_RELEASE)
+                ),
             ],
             testParser: null,
             coverageFiles: [],
