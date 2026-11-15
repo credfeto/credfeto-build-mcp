@@ -33,7 +33,9 @@ public static class CommandLine
             + SELF_TEST
             + "  Builds the service provider and resolves every dependency, then exits: 0 when that works, 1 with",
         "               a one-line reason on stderr when it does not. Starts no MCP transport, reads no input and opens",
-        "               no repository, file or network connection; only git may run, to find the repository root.",
+        "               no file or network connection; the repository is only located (git runs when "
+            + BuildServerEnvironment.REPOSITORY_ROOT_VARIABLE,
+        "               is unset and " + BuildServerEnvironment.DEFAULT_REPOSITORY_ROOT + " is missing), never read.",
         "  " + SHORT_HELP + ", " + HELP + "   Shows this help and exits."
     );
 

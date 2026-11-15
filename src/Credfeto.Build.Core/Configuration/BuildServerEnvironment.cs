@@ -113,7 +113,7 @@ public sealed record BuildServerEnvironment(
                 REPOSITORY_ROOT_VARIABLE
                     + " is not set, "
                     + defaultRepositoryRoot
-                    + " does not exist and the current directory is not in a git checkout: set "
+                    + " does not exist and the current directory is not in a git checkout (or git could not be run): set "
                     + REPOSITORY_ROOT_VARIABLE
                     + " to the repository's absolute path, or start the server inside the repository"
             );

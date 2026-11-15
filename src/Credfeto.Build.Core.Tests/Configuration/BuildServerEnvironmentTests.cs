@@ -20,7 +20,7 @@ public sealed class BuildServerEnvironmentTests : TestBase
     private const string NOT_IN_A_CHECKOUT_MESSAGE =
         "BUILD_MCP_REPO_ROOT is not set, "
         + MISSING_DEFAULT_ROOT
-        + " does not exist and the current directory is not in a git checkout: set BUILD_MCP_REPO_ROOT to the repository's absolute path, or start the server inside the repository";
+        + " does not exist and the current directory is not in a git checkout (or git could not be run): set BUILD_MCP_REPO_ROOT to the repository's absolute path, or start the server inside the repository";
 
     private const string CREATE_FAILED_MESSAGE =
         "There is no home directory for the job logs, and a private folder could not be created in the temporary directory: set BUILD_MCP_LOG_DIR to an absolute path";

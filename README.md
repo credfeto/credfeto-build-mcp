@@ -60,8 +60,8 @@ carries on without it; the per-call check still applies.
 The repository the server works on is **never** a tool argument. It is `BUILD_MCP_REPO_ROOT` when that is set. When it
 is unset, it is `/workspace/repo` if that folder exists (the agent container's mount), and otherwise the git top-level
 folder of the directory the server was started in (`git rev-parse --show-toplevel`; git is only run in that case). If the
-variable is unset, `/workspace/repo` is missing and the start directory is not in a git checkout, the server stops at
-startup with exit code 1 and a message on stderr saying so. When serving, the server writes one line to stderr naming the
+variable is unset, `/workspace/repo` is missing and the start directory is not in a git checkout (or git can't be run),
+the server stops at startup with exit code 1 and a message on stderr saying so. When serving, the server writes one line to stderr naming the
 chosen root and where it came from, for example
 `credfeto-build-dotnet: repository root /src/app (the git root of the current directory; BUILD_MCP_REPO_ROOT is not set and the default folder does not exist)`;
 stdout carries only MCP traffic. A value that is set but is not an absolute path (relative, empty or whitespace)
@@ -195,10 +195,10 @@ With no arguments the server serves MCP over stdio. It also takes one of these s
 
 - `--self-test`: builds the service provider and configuration and resolves every dependency, then exits: `0` when
   that works, `1` with a one-line `self-test failed: <reason>` on stderr when it does not. It starts no MCP transport,
-  reads no stdin, opens no network connection and does no repository or file work, so an image build can run
-  `credfeto-build-dotnet --self-test` to check the installed tool loads. It finds the repository root as serving does,
-  so with `BUILD_MCP_REPO_ROOT` unset and no `/workspace/repo` it asks git for the start directory's top level, and
-  fails outside a git checkout; it prints no repository root line when it passes.
+  reads no stdin, opens no network connection and does no file work, so an image build can run
+  `credfeto-build-dotnet --self-test` to check the installed tool loads. The only repository work is locating the root
+  as serving does: with `BUILD_MCP_REPO_ROOT` unset and no `/workspace/repo` it asks git for the start directory's top
+  level, and fails outside a git checkout. It prints no repository root line when it passes.
 - `--help`, `-h`: lists the switches and exits with `0`.
 
 Any other argument, or more than one switch, prints a one-line error on stderr and exits with `2`.
