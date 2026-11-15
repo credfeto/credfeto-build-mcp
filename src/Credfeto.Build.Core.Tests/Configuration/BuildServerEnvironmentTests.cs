@@ -10,18 +10,21 @@ namespace Credfeto.Build.Core.Tests.Configuration;
 
 public sealed class BuildServerEnvironmentTests : TestBase
 {
-    private const string CURRENT_USER = "1234";
+    private const string PRIVATE_FOLDER = "/tmp/credfeto-build-mcp-private";
+
+    private const string CREATE_FAILED_MESSAGE =
+        "There is no home directory for the job logs, and a private folder could not be created in the temporary directory: set BUILD_MCP_LOG_DIR to an absolute path";
 
     [Fact]
     public static void DefaultsApplyWhenNothingIsSet()
     {
         BuildServerEnvironment environment = BuildServerEnvironment.Resolve(
             getVariable: static _ => null,
-            currentUser: static () => CURRENT_USER
+            createPrivateFolder: static () => PRIVATE_FOLDER
         );
 
         Assert.Equal(expected: BuildServerEnvironment.DEFAULT_REPOSITORY_ROOT, actual: environment.RepositoryRoot);
-        Assert.Equal(expected: TemporaryFolderFor(CURRENT_USER), actual: environment.LogDirectory);
+        Assert.Equal(expected: PRIVATE_FOLDER, actual: environment.LogDirectory);
     }
 
     [Fact]
@@ -123,11 +126,24 @@ public sealed class BuildServerEnvironmentTests : TestBase
     [InlineData("relative/home")]
     [InlineData("")]
     [InlineData("   ")]
-    public static void WithoutAnAbsoluteHomeTheTemporaryFolderIsPerUser(string value)
+    public static void WithoutAnAbsoluteHomeAPrivateFolderIsUsed(string value)
     {
         BuildServerEnvironment environment = Resolve((BuildServerEnvironment.HOME_VARIABLE, value));
 
-        Assert.Equal(expected: TemporaryFolderFor(CURRENT_USER), actual: environment.LogDirectory);
+        Assert.Equal(expected: PRIVATE_FOLDER, actual: environment.LogDirectory);
+    }
+
+    [Theory]
+    [InlineData("relative/state")]
+    [InlineData("")]
+    public static void WithoutAnAbsoluteStateHomeOrHomeAPrivateFolderIsUsed(string value)
+    {
+        BuildServerEnvironment environment = Resolve(
+            (BuildServerEnvironment.STATE_HOME_VARIABLE, value),
+            (BuildServerEnvironment.HOME_VARIABLE, "relative/home")
+        );
+
+        Assert.Equal(expected: PRIVATE_FOLDER, actual: environment.LogDirectory);
     }
 
     [Fact]
@@ -135,21 +151,6 @@ public sealed class BuildServerEnvironmentTests : TestBase
     {
         BuildServerEnvironment first = Resolve((BuildServerEnvironment.HOME_VARIABLE, "/home/first"));
         BuildServerEnvironment second = Resolve((BuildServerEnvironment.HOME_VARIABLE, "/home/second"));
-
-        Assert.NotEqual(expected: first.LogDirectory, actual: second.LogDirectory, comparer: StringComparer.Ordinal);
-    }
-
-    [Fact]
-    public static void DifferentUsersWithoutAHomeGetDifferentFolders()
-    {
-        BuildServerEnvironment first = BuildServerEnvironment.Resolve(
-            getVariable: static _ => null,
-            currentUser: static () => "1000"
-        );
-        BuildServerEnvironment second = BuildServerEnvironment.Resolve(
-            getVariable: static _ => null,
-            currentUser: static () => "1001"
-        );
 
         Assert.NotEqual(expected: first.LogDirectory, actual: second.LogDirectory, comparer: StringComparer.Ordinal);
     }
@@ -166,23 +167,124 @@ public sealed class BuildServerEnvironmentTests : TestBase
     }
 
     [Fact]
-    public static void TheUserIsOnlyLookedUpWhenThereIsNoHome()
+    public static void ThePrivateFolderIsNotCreatedWhenThereIsAHome()
     {
         BuildServerEnvironment environment = BuildServerEnvironment.Resolve(
             getVariable: static name =>
                 StringComparer.Ordinal.Equals(x: name, y: BuildServerEnvironment.HOME_VARIABLE) ? "/home/user" : null,
-            currentUser: static () => throw new InvalidOperationException("The user should not be looked up")
+            createPrivateFolder: NeverCreated
         );
 
         Assert.Equal(expected: "/home/user/.local/state/credfeto-build-mcp/logs", actual: environment.LogDirectory);
     }
 
     [Fact]
-    public static void TheProcessUserIsKnown()
+    public static void ThePrivateFolderIsNotCreatedWhenTheLogDirectoryIsSet()
     {
-        string user = BuildServerEnvironment.CurrentUser();
+        BuildServerEnvironment environment = BuildServerEnvironment.Resolve(
+            getVariable: static name =>
+                StringComparer.Ordinal.Equals(x: name, y: BuildServerEnvironment.LOG_DIRECTORY_VARIABLE)
+                    ? "/work/logs"
+                    : null,
+            createPrivateFolder: NeverCreated
+        );
 
-        Assert.False(condition: string.IsNullOrWhiteSpace(user), userMessage: "The current user should be known");
+        Assert.Equal(expected: "/work/logs", actual: environment.LogDirectory);
+    }
+
+    [Fact]
+    public static void ARelativeLogDirectoryWithoutAHomeNamesThePrivateFolderWithoutCreatingIt()
+    {
+        InvalidBuildConfigurationException exception = Assert.Throws<InvalidBuildConfigurationException>(() =>
+            BuildServerEnvironment.Resolve(
+                getVariable: static name =>
+                    StringComparer.Ordinal.Equals(x: name, y: BuildServerEnvironment.LOG_DIRECTORY_VARIABLE)
+                        ? "relative/logs"
+                        : null,
+                createPrivateFolder: NeverCreated
+            )
+        );
+
+        Assert.Equal(
+            expected: "BUILD_MCP_LOG_DIR is set to \"relative/logs\", which is not an absolute path: set it to an absolute path, or unset it to use a new private folder in the temporary directory",
+            actual: exception.Message
+        );
+    }
+
+    [Fact]
+    public static void APrivateFolderThatCannotBeCreatedIsAnError()
+    {
+        IOException failure = new("No space left on device");
+
+        InvalidBuildConfigurationException exception = Assert.Throws<InvalidBuildConfigurationException>(() =>
+            BuildServerEnvironment.Resolve(getVariable: static _ => null, createPrivateFolder: () => throw failure)
+        );
+
+        Assert.Equal(expected: CREATE_FAILED_MESSAGE, actual: exception.Message);
+        Assert.Same(expected: failure, actual: exception.InnerException);
+    }
+
+    [Fact]
+    public static void APrivateFolderThatIsNotAllowedIsAnError()
+    {
+        InvalidBuildConfigurationException exception = Assert.Throws<InvalidBuildConfigurationException>(() =>
+            BuildServerEnvironment.Resolve(
+                getVariable: static _ => null,
+                createPrivateFolder: static () => throw new UnauthorizedAccessException("Permission denied")
+            )
+        );
+
+        Assert.Equal(expected: CREATE_FAILED_MESSAGE, actual: exception.Message);
+    }
+
+    [Fact]
+    public static void EachPrivateFolderIsNewAndOwnerOnly()
+    {
+        string first = BuildServerEnvironment.CreatePrivateTemporaryFolder();
+        string second = BuildServerEnvironment.CreatePrivateTemporaryFolder();
+
+        try
+        {
+            Assert.NotEqual(expected: first, actual: second, comparer: StringComparer.Ordinal);
+            AssertPrivateFolder(first);
+            AssertPrivateFolder(second);
+        }
+        finally
+        {
+            Directory.Delete(first);
+            Directory.Delete(second);
+        }
+    }
+
+    private static void AssertPrivateFolder(string folder)
+    {
+        DirectoryInfo info = new(folder);
+
+        Assert.True(condition: info.Exists, userMessage: "The private folder should exist");
+        Assert.Null(info.LinkTarget);
+        Assert.Equal(
+            expected: Path.TrimEndingDirectorySeparator(Path.GetTempPath()),
+            actual: info.Parent?.FullName,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.StartsWith(
+            expectedStartString: "credfeto-build-mcp-",
+            actualString: info.Name,
+            comparisonType: StringComparison.Ordinal
+        );
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(
+                expected: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                actual: info.UnixFileMode
+            );
+        }
+    }
+
+    private static string NeverCreated()
+    {
+        throw new InvalidOperationException("The private folder should not be created");
     }
 
     private static BuildServerEnvironment Resolve(params (string Name, string Value)[] values)
@@ -194,15 +296,9 @@ public sealed class BuildServerEnvironmentTests : TestBase
             variables[name] = value;
         }
 
-        return BuildServerEnvironment.Resolve(getVariable: variables.GetValueOrDefault, currentUser: static () =>
-            CURRENT_USER
-        );
-    }
-
-    private static string TemporaryFolderFor(string user)
-    {
-        return Path.TrimEndingDirectorySeparator(
-            Path.Combine(path1: Path.GetTempPath(), path2: "credfeto-build-mcp-" + user)
+        return BuildServerEnvironment.Resolve(
+            getVariable: variables.GetValueOrDefault,
+            createPrivateFolder: static () => PRIVATE_FOLDER
         );
     }
 }

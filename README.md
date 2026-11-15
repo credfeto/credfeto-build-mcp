@@ -66,7 +66,7 @@ so the agent never composes a `cd`.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `BUILD_MCP_REPO_ROOT` | `/workspace/repo` | The repository to work on. Must be an absolute path when set; anything else is a startup error. |
-| `BUILD_MCP_LOG_DIR` | `$XDG_STATE_HOME/credfeto-build-mcp/logs`, else `~/.local/state/credfeto-build-mcp/logs`, else `$TMPDIR/credfeto-build-mcp-<uid>` when there is no home directory | Where each job writes its full log (`<job id>.log`, mode 0600) in a per-user folder with mode 0700. Must be an absolute path when set; anything else is a startup error. A relative `XDG_STATE_HOME` or `HOME` is ignored when choosing the default. |
+| `BUILD_MCP_LOG_DIR` | `$XDG_STATE_HOME/credfeto-build-mcp/logs`, else `~/.local/state/credfeto-build-mcp/logs`, else, when there is no home directory, a new private folder (`credfeto-build-mcp-<random>`, mode 0700) that the server creates in `$TMPDIR` at startup | Where each job writes its full log (`<job id>.log`, mode 0600) in a per-user folder with mode 0700. Must be an absolute path when set; anything else is a startup error. A relative `XDG_STATE_HOME` or `HOME` is ignored when choosing the default. The temporary-directory fallback gets a new random name each start, so another user can't create it first or put a symlink in its place; if it can't be created, startup fails with a message to set `BUILD_MCP_LOG_DIR`. |
 | `BUILD_MCP_BUILDTEST` | `buildtest` on `PATH` | The absolute path of the pre-commit `buildtest` script that the `buildtest` tool runs. When set to anything else (including empty) the `buildtest` tool fails with a message naming the variable. |
 
 ### Tools
