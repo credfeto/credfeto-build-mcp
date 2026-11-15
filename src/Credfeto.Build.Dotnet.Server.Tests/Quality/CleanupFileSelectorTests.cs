@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Quality;
-using Credfeto.Build.Dotnet.Server.Tests.Helpers;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 

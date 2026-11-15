@@ -10,6 +10,7 @@ using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Quality;
 using Credfeto.Build.Dotnet.Server.Tests.Helpers;
 using Credfeto.Build.Dotnet.Server.Tools;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using ModelContextProtocol.Protocol;
 using Xunit;
@@ -35,14 +36,26 @@ public sealed class QualityToolTests : TestBase, IDisposable
     {
         await this.WriteManifestAsync(".config/dotnet-tools.json");
 
-        CallToolResult result = await this.CallAsync(name: "buildcheck", arguments: Arguments(name: "mode", value: mode));
+        CallToolResult result = await this.CallAsync(
+            name: "buildcheck",
+            arguments: Arguments(name: "mode", value: mode)
+        );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         JobDefinition definition = Assert.Single(this._runner.Started);
         Assert.Equal(expected: 2, actual: definition.Steps.Count);
         this.AssertToolRestore(definition.Steps[0]);
         Assert.Equal(
-            expected: ["buildcheck", "-Solution", this._repository.Combine("src/Example.slnx"), "-WarningAsErrors", "true", "-PreReleaseBuild", preRelease],
+            expected:
+            [
+                "buildcheck",
+                "-Solution",
+                this._repository.Combine("src/Example.slnx"),
+                "-WarningAsErrors",
+                "true",
+                "-PreReleaseBuild",
+                preRelease,
+            ],
             actual: definition.Steps[1].Arguments,
             comparer: StringComparer.Ordinal
         );
@@ -56,12 +69,20 @@ public sealed class QualityToolTests : TestBase, IDisposable
     [InlineData("changelog_lint")]
     public async Task QualityToolsWithoutAToolManifestFailClearlyAsync(string tool)
     {
-        _ = await this._repository.WriteAsync(relative: "CHANGELOG.md", content: "# Changelog\n", cancellationToken: this.CancellationToken());
+        _ = await this._repository.WriteAsync(
+            relative: "CHANGELOG.md",
+            content: "# Changelog\n",
+            cancellationToken: this.CancellationToken()
+        );
 
         CallToolResult result = await this.CallAsync(name: tool, arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: tool + " ran without a manifest");
-        Assert.Contains(expectedSubstring: "no .NET tool manifest", actualString: Text(result), comparisonType: StringComparison.Ordinal);
+        Assert.Contains(
+            expectedSubstring: "no .NET tool manifest",
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
         Assert.Empty(this._runner.Started);
     }
 
@@ -69,14 +90,22 @@ public sealed class QualityToolTests : TestBase, IDisposable
     public async Task ChangelogLintLintsTheRootChangelogAsync()
     {
         await this.WriteManifestAsync("dotnet-tools.json");
-        string changelog = await this._repository.WriteAsync(relative: "CHANGELOG.md", content: "# Changelog\n", cancellationToken: this.CancellationToken());
+        string changelog = await this._repository.WriteAsync(
+            relative: "CHANGELOG.md",
+            content: "# Changelog\n",
+            cancellationToken: this.CancellationToken()
+        );
 
         CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         JobDefinition definition = Assert.Single(this._runner.Started);
         this.AssertToolRestore(definition.Steps[0]);
-        Assert.Equal(expected: ["changelog", "--changelog", changelog, "--lint"], actual: definition.Steps[1].Arguments, comparer: StringComparer.Ordinal);
+        Assert.Equal(
+            expected: ["changelog", "--changelog", changelog, "--lint"],
+            actual: definition.Steps[1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
         Assert.Equal(expected: this._repository.Path, actual: definition.Steps[1].WorkingDirectory);
     }
 
@@ -88,18 +117,32 @@ public sealed class QualityToolTests : TestBase, IDisposable
         CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: "linted a missing changelog");
-        Assert.Contains(expectedSubstring: "CHANGELOG.md", actualString: Text(result), comparisonType: StringComparison.Ordinal);
+        Assert.Contains(
+            expectedSubstring: "CHANGELOG.md",
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
         Assert.Empty(this._runner.Started);
     }
 
     [Fact]
     public async Task BuildtestRunsTheInstalledScriptWithNoArgumentsFromTheRootAsync()
     {
-        string script = await this._repository.WriteAsync(relative: "tools/buildtest", content: "#!/bin/sh\nexit 0\n", cancellationToken: this.CancellationToken());
+        string script = await this._repository.WriteAsync(
+            relative: "tools/buildtest",
+            content: "#!/bin/sh\nexit 0\n",
+            cancellationToken: this.CancellationToken()
+        );
         Executable.Mark(script);
-        BuildtestLocator locator = new(name => StringComparer.Ordinal.Equals(x: name, y: BuildtestLocator.VARIABLE) ? script : null);
+        BuildtestLocator locator = new(name =>
+            StringComparer.Ordinal.Equals(x: name, y: BuildtestLocator.VARIABLE) ? script : null
+        );
 
-        CallToolResult result = await this.CallAsync(name: "buildtest", arguments: [with(StringComparer.Ordinal)], buildtest: locator);
+        CallToolResult result = await this.CallAsync(
+            name: "buildtest",
+            arguments: [with(StringComparer.Ordinal)],
+            buildtest: locator
+        );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         ProcessStep step = Assert.Single(Assert.Single(this._runner.Started).Steps);
@@ -114,7 +157,11 @@ public sealed class QualityToolTests : TestBase, IDisposable
         CallToolResult result = await this.CallAsync(name: "buildtest", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: "ran a missing script");
-        Assert.Contains(expectedSubstring: BuildtestLocator.VARIABLE, actualString: Text(result), comparisonType: StringComparison.Ordinal);
+        Assert.Contains(
+            expectedSubstring: BuildtestLocator.VARIABLE,
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
         Assert.Empty(this._runner.Started);
     }
 
@@ -123,23 +170,48 @@ public sealed class QualityToolTests : TestBase, IDisposable
     {
         CancellationToken cancellationToken = this.CancellationToken();
         await this.WriteManifestAsync(".config/dotnet-tools.json");
-        await TestGit.RunAsync(repository: this._repository.Path, arguments: ["init", "--quiet"], cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "src/Old.cs", content: "class Old {}\n", cancellationToken: cancellationToken);
-        await TestGit.CommitAllAsync(repository: this._repository.Path, message: "base", cancellationToken: cancellationToken);
-        string changed = await this._repository.WriteAsync(relative: "src/New.cs", content: "class New{}\n", cancellationToken: cancellationToken);
+        await TestGit.RunAsync(
+            repository: this._repository.Path,
+            arguments: ["init", "--quiet"],
+            cancellationToken: cancellationToken
+        );
+        _ = await this._repository.WriteAsync(
+            relative: "src/Old.cs",
+            content: "class Old {}\n",
+            cancellationToken: cancellationToken
+        );
+        await TestGit.CommitAllAsync(
+            repository: this._repository.Path,
+            message: "base",
+            cancellationToken: cancellationToken
+        );
+        string changed = await this._repository.WriteAsync(
+            relative: "src/New.cs",
+            content: "class New{}\n",
+            cancellationToken: cancellationToken
+        );
 
         CallToolResult result = await this.CallAsync(name: "cleanup", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         JobDefinition definition = Assert.Single(this._runner.Started);
         this.AssertToolRestore(definition.Steps[0]);
-        Assert.Equal(expected: ["cscleanup", changed], actual: definition.Steps[1].Arguments, comparer: StringComparer.Ordinal);
+        Assert.Equal(
+            expected: ["cscleanup", changed],
+            actual: definition.Steps[1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
         Assert.Equal(expected: this._repository.Path, actual: definition.Steps[1].WorkingDirectory);
 
         // What the formatter would do; the probe reports it once the job's steps have run
         await File.WriteAllTextAsync(path: changed, contents: "class New { }\n", cancellationToken: cancellationToken);
-        IChangedFilesProbe probe = definition.ChangedFiles ?? throw new InvalidOperationException("No changed-files probe");
-        Assert.Equal(expected: ["src/New.cs"], actual: await probe.CollectAsync(cancellationToken), comparer: StringComparer.Ordinal);
+        IChangedFilesProbe probe = definition.ChangedFiles
+            ?? throw new InvalidOperationException("No changed-files probe");
+        Assert.Equal(
+            expected: ["src/New.cs"],
+            actual: await probe.CollectAsync(cancellationToken),
+            comparer: StringComparer.Ordinal
+        );
     }
 
     [Fact]
@@ -147,14 +219,30 @@ public sealed class QualityToolTests : TestBase, IDisposable
     {
         CancellationToken cancellationToken = this.CancellationToken();
         await this.WriteManifestAsync(".config/dotnet-tools.json");
-        await TestGit.RunAsync(repository: this._repository.Path, arguments: ["init", "--quiet"], cancellationToken: cancellationToken);
-        _ = await this._repository.WriteAsync(relative: "src/Old.cs", content: "class Old {}\n", cancellationToken: cancellationToken);
-        await TestGit.CommitAllAsync(repository: this._repository.Path, message: "base", cancellationToken: cancellationToken);
+        await TestGit.RunAsync(
+            repository: this._repository.Path,
+            arguments: ["init", "--quiet"],
+            cancellationToken: cancellationToken
+        );
+        _ = await this._repository.WriteAsync(
+            relative: "src/Old.cs",
+            content: "class Old {}\n",
+            cancellationToken: cancellationToken
+        );
+        await TestGit.CommitAllAsync(
+            repository: this._repository.Path,
+            message: "base",
+            cancellationToken: cancellationToken
+        );
 
         CallToolResult result = await this.CallAsync(name: "cleanup", arguments: [with(StringComparer.Ordinal)]);
 
         Assert.True(condition: result.IsError, userMessage: Text(result));
-        Assert.Contains(expectedSubstring: "nothing to clean up", actualString: Text(result), comparisonType: StringComparison.Ordinal);
+        Assert.Contains(
+            expectedSubstring: "nothing to clean up",
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
         Assert.Empty(this._runner.Started);
     }
 
@@ -162,12 +250,25 @@ public sealed class QualityToolTests : TestBase, IDisposable
     public void CleanupOfManyFilesIsSplitIntoBatches()
     {
         DotnetRepository repository = TestRepositories.Create(root: this._repository.Path);
-        string[] files = [.. Enumerable.Range(start: 0, count: CleanupTool.FILES_PER_STEP * 2 + 1).Select(index => "/repo/F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".cs")];
+        string[] files =
+        [
+            .. Enumerable
+                .Range(start: 0, count: CleanupTool.FILES_PER_STEP * 2 + 1)
+                .Select(index => "/repo/F" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".cs"),
+        ];
 
         IReadOnlyList<ProcessStep> steps = CleanupTool.Steps(repository: repository, files: files);
 
-        Assert.Equal(expected: ["cscleanup 1/3", "cscleanup 2/3", "cscleanup 3/3"], actual: steps.Select(static step => step.Name), comparer: StringComparer.Ordinal);
-        Assert.Equal(expected: files, actual: steps.SelectMany(static step => step.Arguments.Skip(1)), comparer: StringComparer.Ordinal);
+        Assert.Equal(
+            expected: ["cscleanup 1/3", "cscleanup 2/3", "cscleanup 3/3"],
+            actual: steps.Select(static step => step.Name),
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: files,
+            actual: steps.SelectMany(static step => step.Arguments.Skip(1)),
+            comparer: StringComparer.Ordinal
+        );
     }
 
     private void AssertToolRestore(ProcessStep step)
@@ -179,7 +280,11 @@ public sealed class QualityToolTests : TestBase, IDisposable
 
     private async ValueTask WriteManifestAsync(string relative)
     {
-        _ = await this._repository.WriteAsync(relative: relative, content: MANIFEST, cancellationToken: this.CancellationToken());
+        _ = await this._repository.WriteAsync(
+            relative: relative,
+            content: MANIFEST,
+            cancellationToken: this.CancellationToken()
+        );
     }
 
     private ValueTask<CallToolResult> CallAsync(string name, Dictionary<string, JsonElement> arguments)
@@ -187,9 +292,15 @@ public sealed class QualityToolTests : TestBase, IDisposable
         return this.CallAsync(name: name, arguments: arguments, buildtest: TestContexts.NoBuildtest);
     }
 
-    private ValueTask<CallToolResult> CallAsync(string name, Dictionary<string, JsonElement> arguments, BuildtestLocator buildtest)
+    private ValueTask<CallToolResult> CallAsync(
+        string name,
+        Dictionary<string, JsonElement> arguments,
+        BuildtestLocator buildtest
+    )
     {
-        DotnetDetection detection = TestRepositories.Detected(TestRepositories.Create(root: this._repository.Path, TestRepositories.CoreTests));
+        DotnetDetection detection = TestRepositories.Detected(
+            TestRepositories.Create(root: this._repository.Path, TestRepositories.CoreTests)
+        );
         ToolContext context = TestContexts.Create(runner: this._runner, detection: detection, buildtest: buildtest);
 
         return TestContexts

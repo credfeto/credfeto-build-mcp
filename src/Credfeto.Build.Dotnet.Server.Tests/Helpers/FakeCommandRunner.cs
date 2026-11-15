@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
-using Credfeto.Build.Dotnet.Server.Commands;
+using Credfeto.Build.Server.Commands;
 
 namespace Credfeto.Build.Dotnet.Server.Tests.Helpers;
 

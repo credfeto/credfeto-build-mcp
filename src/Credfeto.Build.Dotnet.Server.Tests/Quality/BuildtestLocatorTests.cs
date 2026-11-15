@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Quality;
-using Credfeto.Build.Dotnet.Server.Tests.Helpers;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools.Exceptions;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 

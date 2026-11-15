@@ -13,7 +13,9 @@ using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Json;
 using Credfeto.Build.Dotnet.Server.Models;
 using Credfeto.Build.Dotnet.Server.Packages;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Commands;
+using Credfeto.Build.Server.Tools;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 

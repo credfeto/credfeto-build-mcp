@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Repository;
-using Credfeto.Build.Core.Tests.Helpers;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Xunit;
 
@@ -14,17 +14,33 @@ public sealed class ExecutableSearchTests : TestBase
     public async Task FindsTheFirstExecutableOnTheSearchPathAsync()
     {
         using TemporaryDirectory directory = new();
-        string notExecutable = await directory.WriteAsync(relative: "first/tool", content: "#!/bin/sh\n", cancellationToken: this.CancellationToken());
-        string executable = await directory.WriteAsync(relative: "second/tool", content: "#!/bin/sh\n", cancellationToken: this.CancellationToken());
+        string notExecutable = await directory.WriteAsync(
+            relative: "first/tool",
+            content: "#!/bin/sh\n",
+            cancellationToken: this.CancellationToken()
+        );
+        string executable = await directory.WriteAsync(
+            relative: "second/tool",
+            content: "#!/bin/sh\n",
+            cancellationToken: this.CancellationToken()
+        );
         Assert.SkipWhen(condition: OperatingSystem.IsWindows(), reason: "Unix file modes");
 
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(path: notExecutable, mode: UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            File.SetUnixFileMode(path: executable, mode: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(
+                path: executable,
+                mode: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+            );
         }
 
-        string searchPath = string.Join(Path.PathSeparator, "relative/dir", directory.Combine("first"), directory.Combine("second"));
+        string searchPath = string.Join(
+            Path.PathSeparator,
+            "relative/dir",
+            directory.Combine("first"),
+            directory.Combine("second")
+        );
 
         Assert.Equal(expected: executable, actual: ExecutableSearch.Find(name: "tool", searchPath: searchPath));
         Assert.Null(ExecutableSearch.Find(name: "missing", searchPath: searchPath));
@@ -37,20 +53,35 @@ public sealed class ExecutableSearchTests : TestBase
         Assert.SkipWhen(condition: OperatingSystem.IsWindows(), reason: "Unix file modes");
 
         using TemporaryDirectory directory = new();
-        string target = await directory.WriteAsync(relative: "private/tool", content: "#!/bin/sh\n", cancellationToken: this.CancellationToken());
-        string executable = await directory.WriteAsync(relative: "second/tool", content: "#!/bin/sh\n", cancellationToken: this.CancellationToken());
+        string target = await directory.WriteAsync(
+            relative: "private/tool",
+            content: "#!/bin/sh\n",
+            cancellationToken: this.CancellationToken()
+        );
+        string executable = await directory.WriteAsync(
+            relative: "second/tool",
+            content: "#!/bin/sh\n",
+            cancellationToken: this.CancellationToken()
+        );
         _ = Directory.CreateDirectory(directory.Combine("first"));
         _ = File.CreateSymbolicLink(path: directory.Combine("first/tool"), pathToTarget: target);
 
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(path: executable, mode: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            File.SetUnixFileMode(
+                path: executable,
+                mode: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+            );
             File.SetUnixFileMode(path: directory.Combine("private"), mode: UnixFileMode.None);
         }
 
         try
         {
-            string searchPath = string.Join(Path.PathSeparator, directory.Combine("first"), directory.Combine("second"));
+            string searchPath = string.Join(
+                Path.PathSeparator,
+                directory.Combine("first"),
+                directory.Combine("second")
+            );
 
             Assert.Equal(expected: executable, actual: ExecutableSearch.Find(name: "tool", searchPath: searchPath));
         }
@@ -58,7 +89,10 @@ public sealed class ExecutableSearchTests : TestBase
         {
             if (!OperatingSystem.IsWindows())
             {
-                File.SetUnixFileMode(path: directory.Combine("private"), mode: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                File.SetUnixFileMode(
+                    path: directory.Combine("private"),
+                    mode: UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                );
             }
         }
     }

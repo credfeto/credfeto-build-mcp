@@ -8,7 +8,8 @@ using Credfeto.Build.Core.Coverage;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Testing;
-using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
+using Credfeto.Build.Server.Tools;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
@@ -43,9 +44,10 @@ public sealed class CoverageTool : BuildTool
     )
     {
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
-        string choice =
-            arguments.GetChoice(property: this._project, allowed: [ALL, .. UnitTestProjectChoice.Names(repository)])
-            ?? ALL;
+        string choice = arguments.GetChoice(
+            property: this._project,
+            allowed: [ALL, .. UnitTestProjectChoice.Names(repository)]
+        ) ?? ALL;
         bool writeReport = arguments.GetFlag(this._writeReport);
 
         // One project's figures are not the repository's Overall, so only a run of every project may be recorded
@@ -70,7 +72,8 @@ public sealed class CoverageTool : BuildTool
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.COVERAGE,
             steps: [.. projects.Select(project => DotnetCommands.Coverage(repository: repository, project: project))],
             testParser: new MtpTestOutputParser(),

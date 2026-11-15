@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Core.Configuration.Exceptions;
+using Credfeto.Build.Server;
 using FunFair.Test.Common;
 using Xunit;
 
@@ -44,21 +45,21 @@ public sealed class CommandLineTests : TestBase
     }
 
     [Theory]
-    [InlineData(CommandLine.HELP)]
-    [InlineData(CommandLine.SHORT_HELP)]
+    [InlineData(ServerCommandLine.HELP)]
+    [InlineData(ServerCommandLine.SHORT_HELP)]
     public async Task HelpListsTheSwitchesAsync(string argument)
     {
         (int exitCode, string output, string error, CancellationToken? served) = await this.RunAsync(argument);
 
-        Assert.Equal(expected: CommandLine.SUCCESS, actual: exitCode);
+        Assert.Equal(expected: ServerCommandLine.SUCCESS, actual: exitCode);
         Assert.Equal(expected: CommandLine.Usage + Environment.NewLine, actual: output);
         Assert.Contains(
-            expectedSubstring: CommandLine.SELF_TEST,
+            expectedSubstring: ServerCommandLine.SELF_TEST,
             actualString: output,
             comparisonType: StringComparison.Ordinal
         );
         Assert.Contains(
-            expectedSubstring: CommandLine.HELP,
+            expectedSubstring: ServerCommandLine.HELP,
             actualString: output,
             comparisonType: StringComparison.Ordinal
         );
@@ -70,10 +71,10 @@ public sealed class CommandLineTests : TestBase
     public async Task SelfTestPassesWithoutServingAsync()
     {
         (int exitCode, string output, string error, CancellationToken? served) = await this.RunAsync(
-            CommandLine.SELF_TEST
+            ServerCommandLine.SELF_TEST
         );
 
-        Assert.Equal(expected: SelfTest.PASSED, actual: exitCode);
+        Assert.Equal(expected: SelfTestRunner.PASSED, actual: exitCode);
         Assert.Equal(expected: string.Empty, actual: output);
         Assert.Equal(expected: string.Empty, actual: error);
         Assert.Null(served);
@@ -88,12 +89,12 @@ public sealed class CommandLineTests : TestBase
     [Fact]
     public Task MoreThanOneSwitchIsAUsageErrorAsync()
     {
-        return this.AssertUsageErrorAsync(CommandLine.SELF_TEST, CommandLine.HELP);
+        return this.AssertUsageErrorAsync(ServerCommandLine.SELF_TEST, ServerCommandLine.HELP);
     }
 
     [Theory]
     [InlineData("")]
-    [InlineData(CommandLine.SELF_TEST)]
+    [InlineData(ServerCommandLine.SELF_TEST)]
     public async Task AConfigurationErrorIsReportedOnStandardErrorWithoutServingAsync(string argument)
     {
         string[] arguments = argument.Length == 0 ? [] : [argument];
@@ -116,7 +117,7 @@ public sealed class CommandLineTests : TestBase
             cancellationToken: this.CancellationToken()
         );
 
-        Assert.Equal(expected: CommandLine.CONFIGURATION_ERROR, actual: exitCode);
+        Assert.Equal(expected: ServerCommandLine.CONFIGURATION_ERROR, actual: exitCode);
         Assert.False(condition: served, userMessage: "The server should not start");
         Assert.Equal(expected: string.Empty, actual: output.ToString());
         Assert.Equal(
@@ -129,13 +130,13 @@ public sealed class CommandLineTests : TestBase
     {
         (int exitCode, string output, string error, CancellationToken? served) = await this.RunAsync(arguments);
 
-        Assert.Equal(expected: CommandLine.USAGE_ERROR, actual: exitCode);
+        Assert.Equal(expected: ServerCommandLine.USAGE_ERROR, actual: exitCode);
         Assert.Equal(expected: string.Empty, actual: output);
         Assert.Equal(
             expected: "Unrecognised arguments: "
                 + string.Join(separator: ' ', values: arguments)
                 + " (see "
-                + CommandLine.HELP
+                + ServerCommandLine.HELP
                 + ")"
                 + Environment.NewLine,
             actual: error

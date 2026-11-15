@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Configuration;
-using Credfeto.Build.Dotnet.Server.Tests.Helpers;
-using Credfeto.Build.Dotnet.Server.Tools;
 using Credfeto.Build.Dotnet.Server.Workspace;
+using Credfeto.Build.Server;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -24,13 +24,14 @@ public sealed class SelfTestTests : TestBase
         );
         await using StringWriter error = new();
 
-        int exitCode = await SelfTest.RunAsync(
+        int exitCode = await SelfTestRunner.RunAsync(
             services: SelfTest.Services(environment),
+            buildServiceProvider: SelfTest.BuildServiceProvider,
             error: error,
             cancellationToken: this.CancellationToken()
         );
 
-        Assert.Equal(expected: SelfTest.PASSED, actual: exitCode);
+        Assert.Equal(expected: SelfTestRunner.PASSED, actual: exitCode);
         Assert.Equal(expected: string.Empty, actual: error.ToString());
         Assert.Empty(Directory.EnumerateFileSystemEntries(folder.Path));
     }
@@ -49,60 +50,5 @@ public sealed class SelfTestTests : TestBase
         DotnetWorkspace workspace = provider.GetRequiredService<DotnetWorkspace>();
 
         Assert.Equal(expected: 12, actual: workspace.Tools.Count);
-    }
-
-    [Fact]
-    public async Task ADependencyThatCannotBeResolvedFailsWithOneLineAsync()
-    {
-        IServiceCollection services = new ServiceCollection().AddSingleton<ToolContext>();
-        await using StringWriter error = new();
-
-        int exitCode = await SelfTest.RunAsync(
-            services: services,
-            error: error,
-            cancellationToken: this.CancellationToken()
-        );
-
-        Assert.Equal(expected: SelfTest.FAILED, actual: exitCode);
-        AssertOneFailureLine(error.ToString());
-    }
-
-    [Fact]
-    public async Task AFactoryThatThrowsReportsItsMessageAsync()
-    {
-        IServiceCollection services = new ServiceCollection().AddSingleton<ToolContext>(static _ =>
-            throw new InvalidOperationException("first line" + Environment.NewLine + "second line")
-        );
-        await using StringWriter error = new();
-
-        int exitCode = await SelfTest.RunAsync(
-            services: services,
-            error: error,
-            cancellationToken: this.CancellationToken()
-        );
-
-        Assert.Equal(expected: SelfTest.FAILED, actual: exitCode);
-        Assert.Equal(
-            expected: SelfTest.FAILURE_PREFIX + "first line second line" + Environment.NewLine,
-            actual: error.ToString()
-        );
-    }
-
-    private static void AssertOneFailureLine(string written)
-    {
-        Assert.StartsWith(
-            expectedStartString: SelfTest.FAILURE_PREFIX,
-            actualString: written,
-            comparisonType: StringComparison.Ordinal
-        );
-        Assert.EndsWith(
-            expectedEndString: Environment.NewLine,
-            actualString: written,
-            comparisonType: StringComparison.Ordinal
-        );
-        Assert.Equal(
-            expected: written.Length - Environment.NewLine.Length,
-            actual: written.IndexOf(value: Environment.NewLine, comparisonType: StringComparison.Ordinal)
-        );
     }
 }

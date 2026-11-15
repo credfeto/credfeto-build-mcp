@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using Credfeto.Build.Dotnet.Server.Tests.Helpers;
 using Credfeto.Build.Dotnet.Server.Tools;
+using Credfeto.Build.Testing;
 using FunFair.Test.Common;
 using ModelContextProtocol.Server;
 using Xunit;

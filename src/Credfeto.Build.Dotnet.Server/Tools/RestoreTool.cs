@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
+using Credfeto.Build.Server.Tools;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
@@ -21,13 +22,17 @@ public sealed class RestoreTool : BuildTool
         this._context = context;
     }
 
-    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        CancellationToken cancellationToken
+    )
     {
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
-            repository: repository,
+            repositoryRoot: repository.RepositoryRoot,
+            timeout: repository.Timeout,
             kind: ToolNames.RESTORE,
             steps: [DotnetCommands.Restore(repository)],
             testParser: null,

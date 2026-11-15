@@ -5,10 +5,18 @@
     <File Path="../.editorconfig" />
     <File Path="../.globalconfig" />
     <File Path="global.json" />
+    <File Path="NativeAotTool.targets" />
   </Folder>
   <Folder Name="/Core/">
     <Project Path="Credfeto.Build.Core.Tests/Credfeto.Build.Core.Tests.csproj" />
     <Project Path="Credfeto.Build.Core/Credfeto.Build.Core.csproj" />
+  </Folder>
+  <Folder Name="/Server/">
+    <Project Path="Credfeto.Build.Server.Tests/Credfeto.Build.Server.Tests.csproj" />
+    <Project Path="Credfeto.Build.Server/Credfeto.Build.Server.csproj" />
+  </Folder>
+  <Folder Name="/Testing/">
+    <Project Path="Credfeto.Build.Testing/Credfeto.Build.Testing.csproj" />
   </Folder>
   <Folder Name="/Dotnet/">
     <Project Path="Credfeto.Build.Dotnet.Server.Tests/Credfeto.Build.Dotnet.Server.Tests.csproj" />
