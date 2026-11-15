@@ -17,4 +17,11 @@ public sealed record SchemaProperty(
     public const string FALSE = "false";
 
     public bool Flag { get; init; }
+
+    // A whole number from Minimum to Maximum; DefaultValue holds its default in invariant digits
+    public bool WholeNumber { get; init; }
+
+    public int Minimum { get; init; }
+
+    public int Maximum { get; init; }
 }

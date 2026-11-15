@@ -46,7 +46,7 @@ public sealed class SelfTestTests : TestBase
         await using ServiceProvider provider = SelfTest.Services(environment).BuildServiceProvider();
         DotnetWorkspace workspace = provider.GetRequiredService<DotnetWorkspace>();
 
-        Assert.Equal(expected: 11, actual: workspace.Tools.Count);
+        Assert.Equal(expected: 12, actual: workspace.Tools.Count);
     }
 
     [Fact]

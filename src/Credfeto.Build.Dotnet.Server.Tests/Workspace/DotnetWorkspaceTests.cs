@@ -155,7 +155,12 @@ public sealed class DotnetWorkspaceTests : TestBase, IDisposable
             cancellationToken: this.CancellationToken()
         );
 
-        return new(initial: detection, runner: this._runner, buildtest: TestContexts.NoBuildtest);
+        return new(
+            initial: detection,
+            runner: this._runner,
+            commands: new FakeCommandRunner(),
+            buildtest: TestContexts.NoBuildtest
+        );
     }
 
     private static IReadOnlyList<string> ProjectEnum(DotnetWorkspace workspace, string tool)

@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 
@@ -54,8 +55,15 @@ public static class ToolSchema
     private static void WriteProperty(Utf8JsonWriter writer, SchemaProperty property)
     {
         writer.WriteStartObject(property.Name);
-        writer.WriteString(propertyName: "type", value: property.Flag ? "boolean" : "string");
+        writer.WriteString(propertyName: "type", value: TypeName(property));
         writer.WriteString(propertyName: "description", value: property.Description);
+
+        if (property.WholeNumber)
+        {
+            WriteInteger(writer: writer, property: property);
+
+            return;
+        }
 
         if (property.Flag)
         {
@@ -88,6 +96,32 @@ public static class ToolSchema
         if (property.DefaultValue is not null)
         {
             writer.WriteString(propertyName: "default", value: property.DefaultValue);
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static string TypeName(SchemaProperty property)
+    {
+        if (property.Flag)
+        {
+            return "boolean";
+        }
+
+        return property.WholeNumber ? "integer" : "string";
+    }
+
+    private static void WriteInteger(Utf8JsonWriter writer, SchemaProperty property)
+    {
+        writer.WriteNumber(propertyName: "minimum", value: property.Minimum);
+        writer.WriteNumber(propertyName: "maximum", value: property.Maximum);
+
+        if (property.DefaultValue is not null)
+        {
+            writer.WriteNumber(
+                propertyName: "default",
+                value: int.Parse(s: property.DefaultValue, provider: CultureInfo.InvariantCulture)
+            );
         }
 
         writer.WriteEndObject();

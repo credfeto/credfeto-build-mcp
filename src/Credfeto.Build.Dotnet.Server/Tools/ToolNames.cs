@@ -3,6 +3,7 @@ namespace Credfeto.Build.Dotnet.Server.Tools;
 public static class ToolNames
 {
     public const string DETECT = "detect";
+    public const string PACKAGE_VERSIONS = "package_versions";
     public const string RESTORE = "restore";
     public const string BUILD = "build";
     public const string TEST = "test";
