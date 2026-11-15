@@ -62,6 +62,43 @@ public sealed class ToolCallTests : TestBase, IDisposable
         );
         Assert.True(condition: definition.ContinueOnFailure, userMessage: "every project is measured");
         Assert.False(condition: File.Exists(stale), userMessage: "a stale coverage file is removed before the run");
+        Assert.Null(definition.CoverageReportPath);
+    }
+
+    [Fact]
+    public async Task CoverageWithWriteReportNamesTheRepositoryCoverageFileAsync()
+    {
+        CallToolResult result = await this.CallAsync(name: "coverage", arguments: WriteReport(true));
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Equal(
+            expected: this._repository.Combine("COVERAGE.md"),
+            actual: Assert.Single(this._runner.Started).CoverageReportPath
+        );
+    }
+
+    [Fact]
+    public async Task CoverageWithWriteReportFalseWritesNothingAsync()
+    {
+        CallToolResult result = await this.CallAsync(name: "coverage", arguments: WriteReport(false));
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Null(Assert.Single(this._runner.Started).CoverageReportPath);
+    }
+
+    [Fact]
+    public async Task CoverageOfOneProjectCannotWriteTheReportAsync()
+    {
+        Dictionary<string, JsonElement> arguments = WriteReport(true);
+        arguments["project"] = JsonSerializer.SerializeToElement(
+            value: "Example.Api.Tests",
+            jsonTypeInfo: TestJsonContext.Default.String
+        );
+
+        CallToolResult result = await this.CallAsync(name: "coverage", arguments: arguments);
+
+        Assert.True(condition: result.IsError, userMessage: "one project's figures are not the Overall");
+        Assert.Empty(this._runner.Started);
     }
 
     [Fact]
@@ -172,6 +209,7 @@ public sealed class ToolCallTests : TestBase, IDisposable
     [InlineData("coverage", "project", "../../etc/passwd")]
     [InlineData("coverage", "project", "Example.Integration.Tests")]
     [InlineData("coverage", "project", "Example.Benchmark.Tests")]
+    [InlineData("coverage", "write_report", "true")]
     [InlineData("build", "configuration", "Debug")]
     [InlineData("job_status", "id", "not-an-id")]
     public async Task InvalidArgumentsAreRefusedWithoutStartingAnythingAsync(string tool, string name, string value)
@@ -292,6 +330,17 @@ public sealed class ToolCallTests : TestBase, IDisposable
         return new(StringComparer.Ordinal)
         {
             [name] = JsonSerializer.SerializeToElement(value: value, jsonTypeInfo: TestJsonContext.Default.String),
+        };
+    }
+
+    private static Dictionary<string, JsonElement> WriteReport(bool value)
+    {
+        return new(StringComparer.Ordinal)
+        {
+            ["write_report"] = JsonSerializer.SerializeToElement(
+                value: value,
+                jsonTypeInfo: TestJsonContext.Default.Boolean
+            ),
         };
     }
 

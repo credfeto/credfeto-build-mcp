@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using System.Text;
 
@@ -23,6 +24,30 @@ public static class CoverageMarkdown
         }
 
         return builder.ToString();
+    }
+
+    public static string FormatSection(CoverageSummary summary)
+    {
+        StringBuilder builder = new();
+        builder.Append("## .NET\n\n").Append("| Project | Line Coverage |\n").Append("| --- | --- |\n");
+
+        foreach (AssemblyCoverage assembly in summary.Assemblies)
+        {
+            builder.Append("| ").Append(assembly.Name).Append(" | ").Append(OneDecimalPlace(assembly)).Append("% |\n");
+        }
+
+        builder.Append("| **Overall (.NET)** | **").Append(OneDecimalPlace(summary.Overall)).Append("%** |\n");
+
+        return builder.ToString();
+    }
+
+    private static string OneDecimalPlace(AssemblyCoverage coverage)
+    {
+        // Rounded once from the line counts, so a figure already rounded to two places is never rounded twice
+        decimal percentage = coverage.LinesValid == 0 ? 0m : coverage.LinesCovered * 100m / coverage.LinesValid;
+
+        return decimal.Round(d: percentage, decimals: 1, mode: MidpointRounding.AwayFromZero)
+            .ToString(format: "0.0", provider: CultureInfo.InvariantCulture);
     }
 
     private static void AppendRow(StringBuilder builder, string name, AssemblyCoverage coverage)

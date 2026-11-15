@@ -56,7 +56,10 @@ public sealed class CoverageAggregatorTests : TestBase
             Overall: new(CoverageAggregator.OVERALL, 4, 5, 80d)
         );
 
-        string markdown = CoverageMarkdown.Format(summary: summary, headSha: "0123456789abcdef0123456789abcdef01234567");
+        string markdown = CoverageMarkdown.Format(
+            summary: summary,
+            headSha: "0123456789abcdef0123456789abcdef01234567"
+        );
 
         Assert.Equal(
             expected: "| Component | Line coverage |\n|---|---|\n| Example.Core | 80.0% |\n| **Overall** | 80.0% |\n\nCaptured at commit `0123456789abcdef0123456789abcdef01234567`.\n",
@@ -69,7 +72,50 @@ public sealed class CoverageAggregatorTests : TestBase
     {
         CoverageSummary summary = new(Assemblies: [], Overall: new(CoverageAggregator.OVERALL, 0, 0, 0d));
 
-        Assert.DoesNotContain(expectedSubstring: "Captured", actualString: CoverageMarkdown.Format(summary: summary, headSha: null), comparisonType: System.StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            expectedSubstring: "Captured",
+            actualString: CoverageMarkdown.Format(summary: summary, headSha: null),
+            comparisonType: System.StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public static void SectionHasARowPerProjectAndTheOverallToOneDecimalPlace()
+    {
+        CoverageSummary summary = new(
+            Assemblies: [new("Example.Core", 4, 5, 80d), new("Example.Other", 2, 3, 66.67d)],
+            Overall: new(CoverageAggregator.OVERALL, 6, 8, 75d)
+        );
+
+        Assert.Equal(
+            expected: "## .NET\n\n| Project | Line Coverage |\n| --- | --- |\n| Example.Core | 80.0% |\n| Example.Other | 66.7% |\n| **Overall (.NET)** | **75.0%** |\n",
+            actual: CoverageMarkdown.FormatSection(summary)
+        );
+    }
+
+    [Fact]
+    public static void SectionRoundsOnceFromTheLineCounts()
+    {
+        // 50,449 of 100,000 lines is 50.449%, so 50.4%; rounding the two-place 50.45% again would give 50.5%
+        CoverageSummary summary = new(Assemblies: [], Overall: new(CoverageAggregator.OVERALL, 50449, 100000, 50.45d));
+
+        Assert.EndsWith(
+            expectedEndString: "| **Overall (.NET)** | **50.4%** |\n",
+            actualString: CoverageMarkdown.FormatSection(summary),
+            comparisonType: System.StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public static void SectionOfNoLinesIsZero()
+    {
+        CoverageSummary summary = new(Assemblies: [], Overall: new(CoverageAggregator.OVERALL, 0, 0, 0d));
+
+        Assert.EndsWith(
+            expectedEndString: "| **Overall (.NET)** | **0.0%** |\n",
+            actualString: CoverageMarkdown.FormatSection(summary),
+            comparisonType: System.StringComparison.Ordinal
+        );
     }
 
     private async ValueTask<CoberturaReport> ParseAsync(string xml)

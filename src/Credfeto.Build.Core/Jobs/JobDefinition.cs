@@ -4,9 +4,6 @@ using System.Diagnostics;
 
 namespace Credfeto.Build.Core.Jobs;
 
-/// <summary>
-///     A job: process steps run in order, a timeout for the whole job, and what to collect when it finishes.
-/// </summary>
 [DebuggerDisplay("Kind={Kind}, Steps={Steps.Count}, Timeout={Timeout}")]
 public sealed record JobDefinition(
     string Kind,
@@ -18,6 +15,7 @@ public sealed record JobDefinition(
     string? HeadSha
 )
 {
-    /// <summary>When set, collects the files the job changed once its steps have run.</summary>
     public IChangedFilesProbe? ChangedFiles { get; init; }
+
+    public string? CoverageReportPath { get; init; }
 }
