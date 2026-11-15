@@ -20,6 +20,12 @@
   - any: ['src/Credfeto.Build.Dotnet.Server/**/*']
 "credfeto-build-dotnet-server-tests":
   - any: ['src/Credfeto.Build.Dotnet.Server.Tests/**/*']
+"credfeto-build-server":
+  - any: ['src/Credfeto.Build.Server/**/*']
+"credfeto-build-server-tests":
+  - any: ['src/Credfeto.Build.Server.Tests/**/*']
+"credfeto-build-testing":
+  - any: ['src/Credfeto.Build.Testing/**/*']
 "dotnet":
   - any: ['src/**/*.csproj']
 "Editorconfig":
