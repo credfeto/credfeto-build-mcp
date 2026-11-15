@@ -104,10 +104,14 @@ public sealed class DotnetToolCatalogTests : TestBase
             actual: Enum(schema: schema, property: "project"),
             comparer: StringComparer.Ordinal
         );
+
+        JsonElement writeReport = schema.GetProperty("properties").GetProperty("write_report");
+        Assert.Equal(expected: "boolean", actual: writeReport.GetProperty("type").GetString());
+        Assert.False(condition: writeReport.GetProperty("default").GetBoolean(), userMessage: "the report is opt-in");
     }
 
     [Fact]
-    public static void EveryParameterIsAnEnumOrAPatternCheckedId()
+    public static void EveryParameterIsAnEnumAPatternCheckedIdOrAFlag()
     {
         foreach (McpServerTool tool in Create(TestRepositories.CoreTests))
         {
@@ -115,7 +119,8 @@ public sealed class DotnetToolCatalogTests : TestBase
             {
                 bool constrained =
                     property.Value.TryGetProperty(propertyName: "enum", value: out _)
-                    || property.Value.TryGetProperty(propertyName: "pattern", value: out _);
+                    || property.Value.TryGetProperty(propertyName: "pattern", value: out _)
+                    || StringComparer.Ordinal.Equals(x: property.Value.GetProperty("type").GetString(), y: "boolean");
 
                 Assert.True(
                     condition: constrained,

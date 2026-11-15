@@ -156,7 +156,13 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         try
         {
             bool failed = await this.RunStepsAsync(job);
-            await CollectCoverageAsync(job: job, cancellationToken: job.Cancellation.Token);
+            CoverageSummary? measured = await CollectCoverageAsync(job: job, cancellationToken: job.Cancellation.Token);
+            await this.WriteCoverageReportAsync(
+                job: job,
+                failed: failed,
+                measured: measured,
+                cancellationToken: job.Cancellation.Token
+            );
             await CollectChangedFilesAsync(job: job, cancellationToken: job.Cancellation.Token);
             await job.FinishAsync(state: failed ? JobState.Failed : JobState.Succeeded, message: null);
         }
@@ -237,11 +243,14 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         return failed;
     }
 
-    private static async ValueTask CollectCoverageAsync(RunningJob job, CancellationToken cancellationToken)
+    private static async ValueTask<CoverageSummary?> CollectCoverageAsync(
+        RunningJob job,
+        CancellationToken cancellationToken
+    )
     {
         if (job.Definition.CoverageFiles.Count == 0)
         {
-            return;
+            return null;
         }
 
         List<CoberturaReport> reports = [];
@@ -266,7 +275,69 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
             }
         }
 
-        job.SetCoverage(coverage: reports.Count == 0 ? null : CoverageAggregator.Combine(reports), errors: errors);
+        CoverageSummary? coverage = reports.Count == 0 ? null : CoverageAggregator.Combine(reports);
+        job.SetCoverage(coverage: coverage, errors: errors);
+
+        // Only a measurement of every project is complete; a partial one would understate the overall figure
+        return errors.Count == 0 ? coverage : null;
+    }
+
+    private async ValueTask WriteCoverageReportAsync(
+        RunningJob job,
+        bool failed,
+        CoverageSummary? measured,
+        CancellationToken cancellationToken
+    )
+    {
+        if (job.Definition.CoverageReportPath is not { } path)
+        {
+            return;
+        }
+
+        if (failed)
+        {
+            NotWritten(job: job, reason: "a test run failed");
+
+            return;
+        }
+
+        if (measured is null)
+        {
+            NotWritten(job: job, reason: "the coverage measurement is incomplete");
+
+            return;
+        }
+
+        if (job.Definition.HeadSha is not { } headSha)
+        {
+            NotWritten(job: job, reason: "the commit being measured could not be read");
+
+            return;
+        }
+
+        try
+        {
+            string? existing = File.Exists(path)
+                ? await File.ReadAllTextAsync(path: path, cancellationToken: cancellationToken)
+                : null;
+            string merged = CoverageFile.Merge(
+                existing: existing,
+                dotnetSection: CoverageMarkdown.FormatSection(measured),
+                headSha: headSha,
+                capturedOn: DateOnly.FromDateTime(this._timeProvider.GetUtcNow().UtcDateTime)
+            );
+            await File.WriteAllTextAsync(path: path, contents: merged, cancellationToken: cancellationToken);
+            job.SetCoverageReport(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            job.AddCoverageError(CoverageFile.FILE_NAME + " could not be written: " + exception.Message);
+        }
+    }
+
+    private static void NotWritten(RunningJob job, string reason)
+    {
+        job.AddCoverageError(CoverageFile.FILE_NAME + " was not written because " + reason);
     }
 
     private static async ValueTask CollectChangedFilesAsync(RunningJob job, CancellationToken cancellationToken)

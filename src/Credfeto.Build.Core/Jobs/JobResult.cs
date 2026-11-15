@@ -20,5 +20,6 @@ public sealed record JobResult(
     IReadOnlyList<string> CoverageErrors,
     string? HeadSha,
     string? Message,
-    IReadOnlyList<string>? ChangedFiles
+    IReadOnlyList<string>? ChangedFiles,
+    string? CoverageReportPath
 );

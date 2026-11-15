@@ -1,3 +1,4 @@
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
@@ -5,7 +6,6 @@ using System.Text.Json;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
-/// <summary>Builds a tool's JSON input schema by hand, so no reflection is involved.</summary>
 public static class ToolSchema
 {
     public static JsonElement Create(IReadOnlyList<SchemaProperty> properties)
@@ -25,7 +25,10 @@ public static class ToolSchema
 
             writer.WriteEndObject();
 
-            string[] required = [.. properties.Where(static property => property.Required).Select(static property => property.Name)];
+            string[] required =
+            [
+                .. properties.Where(static property => property.Required).Select(static property => property.Name),
+            ];
 
             if (required.Length != 0)
             {
@@ -51,8 +54,19 @@ public static class ToolSchema
     private static void WriteProperty(Utf8JsonWriter writer, SchemaProperty property)
     {
         writer.WriteStartObject(property.Name);
-        writer.WriteString(propertyName: "type", value: "string");
+        writer.WriteString(propertyName: "type", value: property.Flag ? "boolean" : "string");
         writer.WriteString(propertyName: "description", value: property.Description);
+
+        if (property.Flag)
+        {
+            writer.WriteBoolean(
+                propertyName: "default",
+                value: StringComparer.Ordinal.Equals(x: property.DefaultValue, y: SchemaProperty.TRUE)
+            );
+            writer.WriteEndObject();
+
+            return;
+        }
 
         if (property.Values is not null)
         {

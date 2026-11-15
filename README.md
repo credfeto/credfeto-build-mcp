@@ -82,7 +82,7 @@ The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerat
 | `restore` | none | Starts `dotnet restore <solution>`. |
 | `build` | none | Starts `dotnet restore <solution>`, then `dotnet build <solution> -c Release --no-restore <buildtest properties> -nodeReuse:False` from the solution directory: the whole solution. |
 | `test` | `scope`: `all` (default) or `project`; `project`: one of the unit, integration or benchmark test projects | Runs the tests as pre-commit `buildtest` does: restore, build, then test with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8` and the `buildtest` properties. `all` builds the solution, then starts one `dotnet test --solution <solution>` run from the solution directory with `--filter-not-namespace` for `*.Integration.Tests`, `*.Integration.Tests.*`, `*.Benchmark.Tests` and `*.Benchmark.Tests.*`. `project` builds that project, then runs `dotnet test <Project>/<Project>.csproj ... -p:SolutionDir=<src>/` with no namespace filter. A failed restore or build ends the job, so the tests never run against stale binaries. |
-| `coverage` | `project`: `all` (default) or one of the unit test projects | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. |
+| `coverage` | `project`: `all` (default) or one of the unit test projects; `write_report`: `false` (default) or `true`, with `project` `all` only | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. With `write_report`, a successful run updates the `## .NET` section of `COVERAGE.md` at the repository root and `job_result` gives the file's path in `coverageReportPath`. |
 | `buildcheck` | `mode`: `pre_release` (default) or `release` | Starts `dotnet tool restore`, then `dotnet buildcheck -Solution <absolute solution> -WarningAsErrors true -PreReleaseBuild <true\|false>`. |
 | `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |
 | `changelog_lint` | none | Starts `dotnet tool restore`, then `dotnet changelog --changelog <repo>/CHANGELOG.md --lint`. |
@@ -137,6 +137,13 @@ The files are parsed in-process rather than with `reportgenerator`, so the serve
 repository's tool manifest and works the same in every repository. A line counts once per assembly, and as covered if
 any report hit it. Each test project's coverage is already limited
 to its own assembly by `UnitTests.props`, so an assembly is measured only by its own tests.
+
+With `write_report` set to `true`, a run of every unit test project also writes `COVERAGE.md` at the repository root
+once it succeeds. Only the `## .NET` section (each project to one decimal place, then `**Overall (.NET)**`) and the
+`Captured at commit` line, which names the measured head SHA and the date, are replaced; every other section is kept
+byte for byte. A missing file is created with just the `.NET` section and that line. Nothing is written when a test
+run fails, a coverage file is missing or unreadable, or the head SHA cannot be read; `coverageErrors` then says why.
+`write_report` with a single project is refused, since one project's figures are not the repository's Overall.
 
 ### Per-repository overrides
 

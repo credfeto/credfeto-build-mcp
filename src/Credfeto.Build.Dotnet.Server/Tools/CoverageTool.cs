@@ -1,47 +1,71 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Core.Coverage;
 using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Testing;
+using Credfeto.Build.Dotnet.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
-/// <summary>
-///     Runs the documented coverage form per unit test project, then combines the Cobertura files in-process.
-/// </summary>
 public sealed class CoverageTool : BuildTool
 {
     public const string ALL = "all";
 
     private readonly ToolContext _context;
     private readonly SchemaProperty _project;
+    private readonly SchemaProperty _writeReport;
 
     public CoverageTool(DotnetRepository repository, ToolContext context)
-        : this(context: context, project: ProjectProperty(repository)) { }
+        : this(context: context, project: ProjectProperty(repository), writeReport: WriteReportProperty()) { }
 
-    private CoverageTool(ToolContext context, SchemaProperty project)
+    private CoverageTool(ToolContext context, SchemaProperty project, SchemaProperty writeReport)
         : base(
             name: ToolNames.COVERAGE,
             title: "Measure line coverage",
-            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. Returns the job id at once; poll job_status, then read job_result",
-            schema: [project],
+            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. With write_report, a successful run of all projects also updates the .NET section and commit line of COVERAGE.md at the repository root, leaving every other section as it is. Returns the job id at once; poll job_status, then read job_result",
+            schema: [project, writeReport],
             readOnly: false
         )
     {
         this._context = context;
         this._project = project;
+        this._writeReport = writeReport;
     }
 
-    protected override async ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override async ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        CancellationToken cancellationToken
+    )
     {
         DotnetRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
-        string choice = arguments.GetChoice(property: this._project, allowed: [ALL, .. UnitTestProjectChoice.Names(repository)]) ?? ALL;
-        IReadOnlyList<DotnetProject> projects = UnitTestProjectChoice.Select(repository: repository, choice: choice, all: ALL);
+        string choice =
+            arguments.GetChoice(property: this._project, allowed: [ALL, .. UnitTestProjectChoice.Names(repository)])
+            ?? ALL;
+        bool writeReport = arguments.GetFlag(this._writeReport);
 
-        string[] coverageFiles = [.. projects.Select(project => DotnetCommands.CoverageFile(repository: repository, project: project))];
+        // One project's figures are not the repository's Overall, so only a run of every project may be recorded
+        if (writeReport && !StringComparer.Ordinal.Equals(x: choice, y: ALL))
+        {
+            throw new ToolArgumentException(
+                "Invalid value for " + this._writeReport.Name + "; it needs project " + ALL
+            );
+        }
+
+        IReadOnlyList<DotnetProject> projects = UnitTestProjectChoice.Select(
+            repository: repository,
+            choice: choice,
+            all: ALL
+        );
+
+        string[] coverageFiles =
+        [
+            .. projects.Select(project => DotnetCommands.CoverageFile(repository: repository, project: project)),
+        ];
         PrepareCoverageDirectory(repository: repository, coverageFiles: coverageFiles);
 
         return await JobStarter.StartAsync(
@@ -52,6 +76,9 @@ public sealed class CoverageTool : BuildTool
             testParser: new MtpTestOutputParser(),
             coverageFiles: coverageFiles,
             changedFiles: null,
+            coverageReportPath: writeReport && projects.Count != 0
+                ? Path.Combine(path1: repository.RepositoryRoot, path2: CoverageFile.FILE_NAME)
+                : null,
             cancellationToken: cancellationToken
         );
     }
@@ -77,5 +104,20 @@ public sealed class CoverageTool : BuildTool
             DefaultValue: ALL,
             Required: false
         );
+    }
+
+    private static SchemaProperty WriteReportProperty()
+    {
+        return new(
+            Name: "write_report",
+            Description: "When true and project is all, a successful run writes its figures into COVERAGE.md at the repository root",
+            Values: null,
+            Pattern: null,
+            DefaultValue: SchemaProperty.FALSE,
+            Required: false
+        )
+        {
+            Flag = true,
+        };
     }
 }
