@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -8,7 +9,8 @@ namespace Credfeto.Build.Server.Workspace;
 
 // Watches the repository for the files the language's filter names (and .ai/commands.json) being created, deleted,
 // renamed or edited, and for directories coming and going, and tells the handler once the changes settle. Anything
-// under one of the filter's ignored directories is ignored.
+// under one of the filter's ignored directories is ignored. The filter says which directories are watched, and
+// whether everything under them is too.
 public sealed class RepositoryWatcher : IAsyncDisposable
 {
     public static readonly TimeSpan DefaultDebounce = TimeSpan.FromMilliseconds(500);
@@ -19,14 +21,16 @@ public sealed class RepositoryWatcher : IAsyncDisposable
     private readonly TimeSpan _debounce;
     private readonly WatchFilter _filter;
     private readonly Lock _lock = new();
+    private readonly HashSet<string> _planned;
     private readonly string _repositoryRoot;
     private readonly IRepositoryChangeHandler _source;
     private readonly CancellationTokenSource _stopping = new();
     private readonly TimeProvider _timeProvider;
+    private readonly Dictionary<string, FileSystemWatcher> _watchers = [with(StringComparer.Ordinal)];
     private bool _disposed;
     private Task _pending = Task.CompletedTask;
+    private bool _started;
     private ITimer? _timer;
-    private FileSystemWatcher? _watcher;
 
     public RepositoryWatcher(
         string repositoryRoot,
@@ -41,6 +45,10 @@ public sealed class RepositoryWatcher : IAsyncDisposable
         this._filter = filter;
         this._timeProvider = timeProvider;
         this._debounce = debounce;
+        this._planned = new(
+            filter.Directories.Select(directory => FullPath(Path.Combine(path1: repositoryRoot, path2: directory))),
+            StringComparer.Ordinal
+        );
     }
 
     public bool IsWatching
@@ -49,26 +57,29 @@ public sealed class RepositoryWatcher : IAsyncDisposable
         {
             lock (this._lock)
             {
-                return this._watcher is not null;
+                return this._watchers.Count != 0;
             }
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        FileSystemWatcher? watcher;
+        FileSystemWatcher[] watchers;
         ITimer? timer;
 
         lock (this._lock)
         {
             this._disposed = true;
-            watcher = this._watcher;
+            watchers = [.. this._watchers.Values];
             timer = this._timer;
-            this._watcher = null;
+            this._watchers.Clear();
             this._timer = null;
         }
 
-        watcher?.Dispose();
+        foreach (FileSystemWatcher watcher in watchers)
+        {
+            watcher.Dispose();
+        }
 
         if (timer is not null)
         {
@@ -97,9 +108,52 @@ public sealed class RepositoryWatcher : IAsyncDisposable
             return false;
         }
 
-        FileSystemWatcher watcher = new(this._repositoryRoot)
+        lock (this._lock)
         {
-            IncludeSubdirectories = true,
+            if (this._disposed)
+            {
+                return false;
+            }
+
+            this._started = true;
+        }
+
+        bool watching = false;
+
+        foreach (string directory in this._planned)
+        {
+            watching |= this.TryWatch(directory);
+        }
+
+        if (!watching)
+        {
+            return false;
+        }
+
+        // Anything that changed between start-up detection and the watch starting
+        this.Schedule();
+
+        return true;
+    }
+
+    private bool TryWatch(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return false;
+        }
+
+        lock (this._lock)
+        {
+            if (this._disposed || this._watchers.ContainsKey(directory))
+            {
+                return false;
+            }
+        }
+
+        FileSystemWatcher watcher = new(directory)
+        {
+            IncludeSubdirectories = this._filter.Recursive,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite,
         };
 
@@ -130,20 +184,54 @@ public sealed class RepositoryWatcher : IAsyncDisposable
 
         lock (this._lock)
         {
-            if (this._disposed)
+            if (!this._disposed && this._watchers.TryAdd(key: directory, value: watcher))
             {
-                watcher.Dispose();
-
-                return false;
+                return true;
             }
-
-            this._watcher = watcher;
         }
 
-        // Anything that changed between start-up detection and the watch starting
-        this.Schedule();
+        watcher.Dispose();
 
-        return true;
+        return false;
+    }
+
+    // A listed directory that has just appeared gets its own watch; one that has gone loses it, so it is watched
+    // again if it comes back
+    private void WatchIfPlanned(string fullPath)
+    {
+        string directory = FullPath(fullPath);
+
+        if (this.IsStarted() && this._planned.Contains(directory))
+        {
+            _ = this.TryWatch(directory);
+        }
+    }
+
+    private void StopWatchingIfPlanned(string fullPath)
+    {
+        string directory = FullPath(fullPath);
+        FileSystemWatcher? watcher;
+
+        lock (this._lock)
+        {
+            if (
+                StringComparer.Ordinal.Equals(x: directory, y: FullPath(this._repositoryRoot))
+                || !this._watchers.Remove(key: directory, value: out watcher)
+            )
+            {
+                return;
+            }
+        }
+
+        watcher.Dispose();
+    }
+
+    private bool IsStarted()
+    {
+        lock (this._lock)
+        {
+            return this._started && !this._disposed;
+        }
     }
 
     public bool IsIgnored(string fullPath)
@@ -165,6 +253,7 @@ public sealed class RepositoryWatcher : IAsyncDisposable
         string extension = Path.GetExtension(name);
 
         return this._filter.Extensions.Contains(value: extension, comparer: StringComparer.OrdinalIgnoreCase)
+            || this._filter.FileNames.Contains(value: name, comparer: StringComparer.Ordinal)
             || StringComparer.OrdinalIgnoreCase.Equals(x: name, y: OVERRIDES_FILE)
             || mayBeDirectory && !this.IsIgnoredDirectory(name);
     }
@@ -174,13 +263,27 @@ public sealed class RepositoryWatcher : IAsyncDisposable
         return this._filter.IgnoredDirectories.Contains(value: name, comparer: StringComparer.Ordinal);
     }
 
+    private static string FullPath(string path)
+    {
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+    }
+
     private void OnCreated(object sender, FileSystemEventArgs e)
     {
-        this.ScheduleIf(this.IsRelevant(fullPath: e.FullPath, mayBeDirectory: Directory.Exists(e.FullPath)));
+        bool isDirectory = Directory.Exists(e.FullPath);
+
+        if (isDirectory)
+        {
+            this.WatchIfPlanned(e.FullPath);
+        }
+
+        this.ScheduleIf(this.IsRelevant(fullPath: e.FullPath, mayBeDirectory: isDirectory));
     }
 
     private void OnDeleted(object sender, FileSystemEventArgs e)
     {
+        this.StopWatchingIfPlanned(e.FullPath);
+
         // What was deleted can no longer be inspected; a name without an extension may have been a directory
         this.ScheduleIf(this.IsRelevant(fullPath: e.FullPath, mayBeDirectory: !Path.HasExtension(e.FullPath)));
     }
@@ -193,6 +296,12 @@ public sealed class RepositoryWatcher : IAsyncDisposable
     private void OnRenamed(object sender, RenamedEventArgs e)
     {
         bool mayBeDirectory = Directory.Exists(e.FullPath);
+
+        if (mayBeDirectory)
+        {
+            this.StopWatchingIfPlanned(e.OldFullPath);
+            this.WatchIfPlanned(e.FullPath);
+        }
 
         this.ScheduleIf(
             this.IsRelevant(fullPath: e.FullPath, mayBeDirectory: mayBeDirectory)

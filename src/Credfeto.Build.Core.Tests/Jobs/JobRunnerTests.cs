@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Core.Coverage;
 using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Core.Jobs.Exceptions;
 using Credfeto.Build.Core.Jobs.Services;
@@ -836,6 +837,34 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         Assert.True(condition: finished, userMessage: "An unbounded wait should only return once the job has finished");
 
         return runner.FindResult(status.Id) ?? throw new InvalidOperationException("The job vanished");
+    }
+
+    [Fact]
+    public async Task ANodeCoverageRunWritesTheNodeSectionAndKeepsDotnetAsync()
+    {
+        this._time.SetUtcNow(
+            new(year: 2026, month: 11, day: 16, hour: 9, minute: 30, second: 0, offset: TimeSpan.Zero)
+        );
+        string report = await this._logs.WriteAsync(
+            relative: "COVERAGE.md",
+            content: "# Coverage\n\n## .NET\n\nkept\n\n---\n\nCaptured at commit `old` on 2026-01-01.\n",
+            cancellationToken: this.CancellationToken()
+        );
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            definition: await this.ReportDefinitionAsync(report) with
+            {
+                CoverageLanguage = CoverageLanguage.Node,
+            }
+        );
+
+        Assert.Empty(result.CoverageErrors);
+        Assert.Equal(
+            expected: "# Coverage\n\n## .NET\n\nkept\n\n## Node\n\n| Package | Line Coverage |\n| --- | --- |\n| Example.Core | 60.0% |\n| **Overall (Node)** | **60.0%** |\n\n---\n\nCaptured at commit `abc` on 2026-11-16.\n",
+            actual: await File.ReadAllTextAsync(path: report, cancellationToken: this.CancellationToken())
+        );
     }
 
     private async ValueTask<JobDefinition> ReportDefinitionAsync(string report)

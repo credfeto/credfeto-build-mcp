@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Credfeto.Build.Core.Coverage;
 
 namespace Credfeto.Build.Core.Jobs;
 
@@ -18,4 +19,7 @@ public sealed record JobDefinition(
     public IChangedFilesProbe? ChangedFiles { get; init; }
 
     public string? CoverageReportPath { get; init; }
+
+    // The COVERAGE.md section a coverage report replaces
+    public CoverageLanguage CoverageLanguage { get; init; } = CoverageLanguage.Dotnet;
 }

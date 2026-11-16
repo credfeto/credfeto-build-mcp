@@ -48,7 +48,7 @@ public sealed class OverridesLoaderTests : TestBase
         );
 
         Assert.Null(result.Error);
-        LanguageOverrides? dotnet = result.Overrides.Dotnet;
+        DotnetOverrides? dotnet = result.Overrides.Dotnet;
         Assert.NotNull(dotnet);
         Assert.True(condition: dotnet.Enabled, userMessage: "enabled was read");
         Assert.Equal(expected: "src/Example.slnx", actual: dotnet.Solution);
@@ -81,10 +81,10 @@ public sealed class OverridesLoaderTests : TestBase
         );
 
         Assert.Same(expected: RepositoryOverrides.None, actual: result.Overrides);
-        Assert.NotNull(result.Error);
+        Assert.NotNull(result.DotnetErrors);
         Assert.DoesNotContain(
             expectedSubstring: "rm -rf",
-            actualString: result.Error,
+            actualString: result.DotnetErrors,
             comparisonType: System.StringComparison.Ordinal
         );
     }

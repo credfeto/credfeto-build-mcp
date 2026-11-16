@@ -5,7 +5,8 @@ using Credfeto.Build.Core.Overrides;
 
 namespace Credfeto.Build.Core.Json;
 
-[JsonSerializable(typeof(RepositoryOverrides))]
+[JsonSerializable(typeof(DotnetOverrides))]
+[JsonSerializable(typeof(NodeOverrides))]
 [JsonSerializable(typeof(JobStatus))]
 [JsonSerializable(typeof(JobResult))]
 [JsonSourceGenerationOptions(
