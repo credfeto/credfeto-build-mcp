@@ -18,6 +18,7 @@ that speaks MCP over stdio.
 | `Credfeto.Build.Core` | The shared core (AOT-compatible library): the job runner, repository helpers, Cobertura parsing and the `.ai/commands.json` overrides. |
 | `Credfeto.Build.Server` | The language-neutral MCP server infrastructure every server shares (AOT-compatible library, not packed on its own): the command line and self-test, the stdio host, the live tool list that follows the repository, the repository watcher, the `job_status`/`job_result` tools, the tool argument and schema helpers, the tool errors and the short command runner. |
 | `Credfeto.Build.Dotnet.Server` | The `.NET` server (`credfeto-build-dotnet`), a Native AOT executable. |
+| `Credfeto.Build.Node.Server` | The Node server (`credfeto-build-node`), a Native AOT executable. |
 | `Credfeto.Build.Testing` | Test support shared by the test projects: temporary directories, isolated git, a recording job runner and a minimal MCP client. |
 | `*.Tests` | Unit tests for each of the above. |
 
@@ -270,12 +271,67 @@ decides for itself whether it applies. The image installs the tool with `dotnet 
 
 Not in this first version:
 
-- the Node and Python servers on the same core;
+- the Node server's restore, build, lint, test and coverage jobs, and the Python server;
 - the orchestrator side: installing the tool in the image, registering it in the managed MCP config, allowing its
   tools in managed settings, and then denying raw `dotnet build`, `dotnet test`, `dotnet exec` and
   `dotnet reportgenerator` in Bash;
 - a CI step that runs `StartupTimeTests` against the AOT binary;
 - a `linux-arm64` tool package, packed on an arm64 host.
+
+## The Node server
+
+`Credfeto.Build.Node.Server` (command `credfeto-build-node`, registered as the `build-node` MCP server) is the second
+language server. It is built on `Credfeto.Build.Server`, like the .NET server. This first version detects npm
+repositories and offers `detect`. The restore, build, lint, test and coverage jobs come later.
+
+### Node detection
+
+- **Install roots** are a `package.json` at the repository root and one in `src/`, the two places the CI npm action
+  looks.
+- **Workspaces:** a root's npm `workspaces` field, either an array or `{ "packages": [...] }`, adds its packages. Only
+  literal directories and single-level `dir/*` globs are supported. Deeper globs, negations, paths that leave the root
+  and anything under `node_modules` are skipped.
+- **npm only.** Each install root needs a `package-lock.json` or an `npm-shrinkwrap.json`. Installs always go through
+  npm, so an npm lock file is used even when another package manager's lock file sits next to it.
+  - A root with only a `bun.lock`, `bun.lockb`, `pnpm-lock.yaml` or `yarn.lock`, or one whose `packageManager` names
+    another manager, is reported as unsupported.
+  - A root with no lock file is reported as such, because `npm ci` needs one.
+- **Packages:** each package's name (its directory when `package.json` has none) and which of the `build`, `lint`,
+  `test`, `test:noe2e` and `test:coverage` scripts it has are recorded.
+- **Limits:** each `package.json` is read up to 1 MiB, and a file that is larger, or that is not a JSON object, is
+  reported.
+- **Overrides:** the `node` section of `.ai/commands.json` applies `enabled`, `packages` (narrows the detected
+  packages by name, and reports any name that matches nothing) and `timeoutMinutes` (default 30, at most 240).
+
+When nothing supported is found, the server **registers no tools**, and its instructions give the reason.
+
+### Following a Node repository
+
+Each listed directory is watched **without recursion**: the repository root, `src/`, `.ai/`, and the workspace
+directories and glob parents found at start-up. A recursive watch on Linux adds one kernel watch per directory, so a
+repository with `node_modules` would run out of watches. Changes to `package.json`, the lock files or
+`.ai/commands.json`, and directories coming and going, are debounced and detected again. When the tools change, the
+server sends `notifications/tools/list_changed`.
+
+Only workspace directories that existed at start-up are watched. One added later is picked up by the next change in a
+watched directory, or by the next `detect` call, which always detects afresh.
+
+### Node tools
+
+| Tool | Parameters | What it does |
+| --- | --- | --- |
+| `detect` | none | Lists the install roots and their lock files, the packages with their directories and scripts, the timeout and any overrides error, as they are now. |
+
+### Installing and running the Node server
+
+It installs, packs and starts like the .NET server:
+
+- install it with `dotnet tool install -g Credfeto.Build.Node.Server`;
+- check it with `credfeto-build-node --self-test`;
+- a plain `dotnet pack` in `src/` produces both `Credfeto.Build.Node.Server` and
+  `Credfeto.Build.Node.Server.linux-x64`.
+
+`StartupTimeTests` in `Credfeto.Build.Node.Server.Tests` time the published binary named by `BUILD_MCP_SERVER_BINARY`.
 
 ## Changelog
 

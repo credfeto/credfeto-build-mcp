@@ -22,4 +22,8 @@
     <Project Path="Credfeto.Build.Dotnet.Server.Tests/Credfeto.Build.Dotnet.Server.Tests.csproj" />
     <Project Path="Credfeto.Build.Dotnet.Server/Credfeto.Build.Dotnet.Server.csproj" />
   </Folder>
+  <Folder Name="/Node/">
+    <Project Path="Credfeto.Build.Node.Server.Tests/Credfeto.Build.Node.Server.Tests.csproj" />
+    <Project Path="Credfeto.Build.Node.Server/Credfeto.Build.Node.Server.csproj" />
+  </Folder>
 </Solution>
