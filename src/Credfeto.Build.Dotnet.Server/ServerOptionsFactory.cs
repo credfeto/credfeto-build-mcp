@@ -29,6 +29,6 @@ public static class ServerOptionsFactory
                 + "), so this server offers no tools for now. It watches the repository and offers its tools, with notifications/tools/list_changed, once a solution appears."
             : "Builds, tests, checks and measures coverage for the .NET solution in "
                 + detection.RepositoryRoot
-                + ". Every tool except detect, package_versions, job_status and job_result starts a job and returns its id at once: poll job_status until the state is no longer running, then read job_result. One job runs at a time. The tool list follows the repository: when projects are added or removed the server sends notifications/tools/list_changed.";
+                + ". Every tool except detect, package_versions, job_status and job_result starts a job and returns its id at once: call job_result, which waits for the job to finish, and call it again only while its state is still running. job_status is a single look at progress; never call it in a loop. One job runs at a time. The tool list follows the repository: when projects are added or removed the server sends notifications/tools/list_changed.";
     }
 }

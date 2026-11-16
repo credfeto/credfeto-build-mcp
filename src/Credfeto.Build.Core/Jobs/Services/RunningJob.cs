@@ -21,6 +21,7 @@ internal sealed class RunningJob : IAsyncDisposable
     private string? _message;
     private IReadOnlyList<string>? _changedFiles;
     private string? _coverageReportPath;
+    private TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public RunningJob(
         string id,
@@ -85,9 +86,15 @@ internal sealed class RunningJob : IAsyncDisposable
         return this.Completion.WaitAsync(timeout: timeout, cancellationToken: CancellationToken.None);
     }
 
-    public Task WaitAsync(CancellationToken cancellationToken)
+    // Completes as soon as the job has moved on from what the caller last saw: a step finished or the job ended
+    public Task WaitForChangeAsync(int stepsCompleted)
     {
-        return this.Completion.WaitAsync(cancellationToken);
+        lock (this._lock)
+        {
+            return this._state != JobState.Running || this._steps.Count != stepsCompleted
+                ? Task.CompletedTask
+                : this._changed.Task;
+        }
     }
 
     public void BeginStep(int index)
@@ -95,6 +102,7 @@ internal sealed class RunningJob : IAsyncDisposable
         lock (this._lock)
         {
             this._currentStep = index;
+            this.SignalChange();
         }
     }
 
@@ -103,6 +111,7 @@ internal sealed class RunningJob : IAsyncDisposable
         lock (this._lock)
         {
             this._steps.Add(result);
+            this.SignalChange();
         }
     }
 
@@ -233,6 +242,15 @@ internal sealed class RunningJob : IAsyncDisposable
             this._state = state;
             this._message = message;
             this._finished = this._timeProvider.GetTimestamp();
+            this.SignalChange();
         }
+    }
+
+    // Called under the lock; each waiter holds the signal it was handed, so a fresh one is in place before the old one fires
+    private void SignalChange()
+    {
+        TaskCompletionSource changed = this._changed;
+        this._changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        changed.SetResult();
     }
 }

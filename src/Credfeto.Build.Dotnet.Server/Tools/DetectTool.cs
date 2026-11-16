@@ -29,6 +29,7 @@ public sealed class DetectTool : BuildTool
 
     protected override async ValueTask<string> ExecuteAsync(
         ToolArguments arguments,
+        IToolProgress progress,
         CancellationToken cancellationToken
     )
     {

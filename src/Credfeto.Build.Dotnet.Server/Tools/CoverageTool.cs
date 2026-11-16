@@ -28,7 +28,7 @@ public sealed class CoverageTool : BuildTool
         : base(
             name: ToolNames.COVERAGE,
             title: "Measure line coverage",
-            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. With write_report, a successful run of all projects also updates the .NET section and commit line of COVERAGE.md at the repository root, leaving every other section as it is. Returns the job id at once; poll job_status, then read job_result",
+            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. With write_report, a successful run of all projects also updates the .NET section and commit line of COVERAGE.md at the repository root, leaving every other section as it is. Returns the job id at once; call job_result to wait for its outcome",
             schema: [project, writeReport],
             readOnly: false
         )
@@ -40,6 +40,7 @@ public sealed class CoverageTool : BuildTool
 
     protected override async ValueTask<string> ExecuteAsync(
         ToolArguments arguments,
+        IToolProgress progress,
         CancellationToken cancellationToken
     )
     {
