@@ -22,6 +22,9 @@ internal sealed class RunningJob : IAsyncDisposable
     private IReadOnlyList<string>? _changedFiles;
     private string? _coverageReportPath;
 
+    // Swapped for a fresh one on every step change and completed at the end, so a waiter wakes on the next change
+    private TaskCompletionSource _changed = NewChangeSignal();
+
     public RunningJob(
         string id,
         long sequence,
@@ -85,17 +88,31 @@ internal sealed class RunningJob : IAsyncDisposable
         return this.Completion.WaitAsync(timeout: timeout, cancellationToken: CancellationToken.None);
     }
 
-    public Task WaitAsync(CancellationToken cancellationToken)
+    public JobWatch Watch()
     {
-        return this.Completion.WaitAsync(cancellationToken);
+        Task changed;
+
+        // Taken before the status, so a change after the status was read still completes this signal
+        lock (this._lock)
+        {
+            changed = this._changed.Task;
+        }
+
+        return new(Status: this.Status(), Changed: changed);
     }
 
     public void BeginStep(int index)
     {
+        TaskCompletionSource changed;
+
         lock (this._lock)
         {
             this._currentStep = index;
+            changed = this._changed;
+            this._changed = NewChangeSignal();
         }
+
+        changed.TrySetResult();
     }
 
     public void CompleteStep(StepResult result)
@@ -207,6 +224,11 @@ internal sealed class RunningJob : IAsyncDisposable
         }
     }
 
+    private static TaskCompletionSource NewChangeSignal()
+    {
+        return new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
     private static IReadOnlyList<string> Limit(IReadOnlyList<string> values, int max)
     {
         return values.Count <= max ? [.. values] : [.. values.Take(max)];
@@ -223,6 +245,8 @@ internal sealed class RunningJob : IAsyncDisposable
 
     private void RecordEnd(JobState state, string? message)
     {
+        TaskCompletionSource changed;
+
         lock (this._lock)
         {
             if (this._state != JobState.Running)
@@ -233,6 +257,9 @@ internal sealed class RunningJob : IAsyncDisposable
             this._state = state;
             this._message = message;
             this._finished = this._timeProvider.GetTimestamp();
+            changed = this._changed;
         }
+
+        changed.TrySetResult();
     }
 }

@@ -14,7 +14,7 @@ public sealed class BuildSolutionTool : BuildTool
         : base(
             name: ToolNames.BUILD,
             title: "Build (Release)",
-            description: "Starts a job that restores, then builds the whole solution as pre-commit buildtest does: dotnet build <solution> -c Release --no-restore with buildtest's -p: properties and -nodeReuse:False, from the solution directory. Returns the job id at once; poll job_status, then read job_result",
+            description: "Starts a job that restores, then builds the whole solution as pre-commit buildtest does: dotnet build <solution> -c Release --no-restore with buildtest's -p: properties and -nodeReuse:False, from the solution directory. Returns the job id at once; call job_result to wait for its outcome",
             schema: [],
             readOnly: false
         )

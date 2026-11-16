@@ -51,18 +51,35 @@ public abstract class BuildTool : McpServerTool
         CancellationToken cancellationToken = default
     )
     {
-        return this.CallAsync(arguments: request.Params?.Arguments, cancellationToken: cancellationToken);
+        return this.CallAsync(
+            arguments: request.Params?.Arguments,
+            progress: ToolProgress.For(request: request, error: Console.Error),
+            cancellationToken: cancellationToken
+        );
+    }
+
+    public ValueTask<CallToolResult> CallAsync(
+        IEnumerable<KeyValuePair<string, JsonElement>>? arguments,
+        CancellationToken cancellationToken
+    )
+    {
+        return this.CallAsync(arguments: arguments, progress: ToolProgress.None, cancellationToken: cancellationToken);
     }
 
     public async ValueTask<CallToolResult> CallAsync(
         IEnumerable<KeyValuePair<string, JsonElement>>? arguments,
+        IToolProgress progress,
         CancellationToken cancellationToken
     )
     {
         try
         {
             ToolArguments parsed = new(arguments: arguments, schema: this.Schema);
-            string json = await this.ExecuteAsync(arguments: parsed, cancellationToken: cancellationToken);
+            string json = await this.ExecuteAsync(
+                arguments: parsed,
+                progress: progress,
+                cancellationToken: cancellationToken
+            );
 
             return Result(text: json, isError: false);
         }
@@ -80,6 +97,16 @@ public abstract class BuildTool : McpServerTool
     }
 
     protected abstract ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken);
+
+    // A tool that reports progress while it works overrides this; the others never see the reporter
+    protected virtual ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        IToolProgress progress,
+        CancellationToken cancellationToken
+    )
+    {
+        return this.ExecuteAsync(arguments: arguments, cancellationToken: cancellationToken);
+    }
 
     private static CallToolResult Result(string text, bool isError)
     {

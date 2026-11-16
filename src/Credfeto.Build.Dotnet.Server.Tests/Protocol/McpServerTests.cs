@@ -47,6 +47,16 @@ public sealed class McpServerTests : TestBase
         Assert.Equal(expected: AllTools, actual: result.ToolNames, comparer: StringComparer.Ordinal);
         Assert.True(condition: result.AdvertisesTools, userMessage: "the tools capability is advertised");
         Assert.True(condition: result.AdvertisesListChanged, userMessage: "tools.listChanged is advertised");
+        Assert.DoesNotContain(
+            expectedSubstring: "poll",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.OrdinalIgnoreCase
+        );
+        Assert.Contains(
+            expectedSubstring: "call job_result, which waits",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
     }
 
     [Fact]

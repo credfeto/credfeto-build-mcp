@@ -11,9 +11,11 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
+- `job_result` takes `wait_seconds` (0 to 600, default 240) and waits for a running job to finish, returning as soon as it does, so agents make one call instead of polling `job_status`; while it waits it sends `notifications/progress` on each step change and at least every 15 seconds when the request has a progress token, and cancelling the request ends only the wait (#34)
 ### Fixed
 ### Changed
 - The language-neutral MCP server infrastructure (command line and self-test, stdio host, live tool list, repository watcher, job tools, argument and schema helpers, tool errors and the command runner) moved from the .NET server into a new shared `Credfeto.Build.Server` library, and the shared test helpers into `Credfeto.Build.Testing`, ready for a second language server; the .NET server's tools, schemas, output and start-up are unchanged (#32)
+- The server instructions, the tool descriptions, the job-already-running error and the README no longer tell agents to poll `job_status`: they wait with `job_result`, and `job_status` is an instant look (#34)
 ### Deprecated
 ### Removed
 ### Deployment Changes

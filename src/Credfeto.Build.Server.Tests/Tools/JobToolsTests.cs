@@ -2,6 +2,7 @@ using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Core.Jobs.Exceptions;
 using Credfeto.Build.Server.Tests.Helpers;
 using Credfeto.Build.Server.Tools;
 using Credfeto.Build.Testing;
@@ -77,6 +78,34 @@ public sealed class JobToolsTests : TestBase, IDisposable
         Assert.Equal(expected: JobToolNames.JOB_RESULT, actual: result.ProtocolTool.Name);
         Assert.Equal(expected: "id", actual: status.ProtocolTool.InputSchema.GetProperty("required")[0].GetString());
         Assert.Equal(expected: "id", actual: result.ProtocolTool.InputSchema.GetProperty("required")[0].GetString());
+    }
+
+    [Fact]
+    public static void AJobAlreadyRunningPointsAtJobResultNotPolling()
+    {
+        string message = new JobAlreadyRunningException().Message;
+
+        Assert.Equal(
+            expected: "Another job is still running; wait for it with job_result, then start the next one",
+            actual: message
+        );
+    }
+
+    [Fact]
+    public static void JobStatusIsAnInstantLookThatPointsAtJobResult()
+    {
+        string? description = new JobStatusTool(new RecordingJobRunner()).ProtocolTool.Description;
+
+        Assert.Contains(
+            expectedSubstring: "call job_result, which waits",
+            actualString: description,
+            comparisonType: StringComparison.Ordinal
+        );
+        Assert.DoesNotContain(
+            expectedSubstring: "poll",
+            actualString: description,
+            comparisonType: StringComparison.OrdinalIgnoreCase
+        );
     }
 
     [Fact]

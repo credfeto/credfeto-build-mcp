@@ -14,7 +14,7 @@ public sealed class BuildtestTool : BuildTool
         : base(
             name: ToolNames.BUILDTEST,
             title: "Run everything pre-commit checks",
-            description: "Starts a job that runs the installed pre-commit buildtest script from the repository root, with no arguments: tool restore, code analysis, restore, clean, Release build, API compatibility check, tests, publish and pack. Use before committing; build, test and the quality tools are quicker for iteration. Returns the job id at once; poll job_status, then read job_result",
+            description: "Starts a job that runs the installed pre-commit buildtest script from the repository root, with no arguments: tool restore, code analysis, restore, clean, Release build, API compatibility check, tests, publish and pack. Use before committing; build, test and the quality tools are quicker for iteration. Returns the job id at once; call job_result to wait for its outcome",
             schema: [],
             readOnly: false
         )
