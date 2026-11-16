@@ -10,4 +10,8 @@ public sealed record NodeRepository(
     IReadOnlyList<NodeInstallRoot> InstallRoots,
     IReadOnlyList<NodePackage> Packages,
     TimeSpan Timeout
-);
+)
+{
+    // node.testScript from the overrides: the script test runs instead of the default choice, where a package has it
+    public string? TestScript { get; init; }
+}

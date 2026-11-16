@@ -12,6 +12,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 - The Node server (`credfeto-build-node`, MCP server `build-node`), a Native AOT dotnet tool: npm-only detection of the root and `src/` install roots and their workspaces, a `detect` tool, a non-recursive repository watch that never enters `node_modules`, `--self-test`, and the pointer and `linux-x64` tool packages (#39)
+- Node server jobs: `restore` (`npm ci --ignore-scripts`, the only install path), `build`, `lint` and `test` (offered only when a package has the script, `test` preferring `test:noe2e` for scope `unit`, installing first when `node_modules` is out of date, `CI=true` for every step), Vitest, Jest and `node --test` output parsers chosen by the runner inferred from each package's test script and dependencies, `add_package` and `update_package` for the root and workspace `package.json` files with validated package ids and versions, and the shared `job_status` and `job_result` tools (#41)
 ### Fixed
 ### Changed
 ### Deprecated

@@ -205,6 +205,57 @@ public sealed class NodeDetectorTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task WorkspacePackagesRecordTheirInstallRootDependenciesAndRunnerAsync()
+    {
+        await NpmRepository.WriteAsync(
+            repository: this._repository,
+            directory: "",
+            manifest: """{ "name": "root", "workspaces": ["packages/*"], "scripts": { "test": "node --test", "check": "tsc" } }""",
+            lockFile: NpmRepository.NPM_LOCK_FILE,
+            cancellationToken: this.CancellationToken()
+        );
+        await this.WritePackageAsync(
+            directory: "packages/web",
+            manifest: """
+            {
+              "name": "web",
+              "scripts": { "test": "npm run unit", "test:noe2e": "jest --ci" },
+              "dependencies": { "react": "^19.0.0" },
+              "devDependencies": { "jest": "^30.0.0" },
+              "optionalDependencies": { "fsevents": "*" }
+            }
+            """
+        );
+
+        NodeRepository repository = await this.DetectRepositoryAsync();
+
+        NodePackage root = repository.Packages[0];
+        Assert.True(condition: root.IsInstallRoot, userMessage: "the root package is its own install root");
+        Assert.Equal(expected: NodeTestRunner.NodeTest, actual: root.TestRunner);
+        Assert.Equal(expected: ["test", "check"], actual: root.ScriptNames, comparer: StringComparer.Ordinal);
+
+        NodePackage web = repository.Packages[1];
+        Assert.Equal(expected: ".", actual: web.InstallRoot);
+        Assert.False(condition: web.IsInstallRoot, userMessage: "a workspace installs from its root");
+        Assert.Equal(expected: NodeTestRunner.Jest, actual: web.TestRunner);
+        Assert.Equal(expected: DependencySection.Dependencies, actual: web.FindDependency("react")?.Section);
+        Assert.Equal(expected: DependencySection.DevDependencies, actual: web.FindDependency("jest")?.Section);
+        Assert.Equal(expected: DependencySection.OptionalDependencies, actual: web.FindDependency("fsevents")?.Section);
+        Assert.Null(web.FindDependency("vitest"));
+    }
+
+    [Fact]
+    public async Task TheTestScriptOverrideIsCarriedToTheRepositoryAsync()
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        await this.WriteOverridesAsync("""{ "node": { "testScript": "test:unit" } }""");
+
+        NodeRepository repository = await this.DetectRepositoryAsync();
+
+        Assert.Equal(expected: "test:unit", actual: repository.TestScript);
+    }
+
+    [Fact]
     public async Task AnInvalidManifestIsReportedAsync()
     {
         await NpmRepository.WriteAsync(

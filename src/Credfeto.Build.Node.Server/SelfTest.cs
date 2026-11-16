@@ -25,14 +25,18 @@ public static class SelfTest
         );
     }
 
-    // A made-up npm repository with one package, so every tool is built without reading the real repository
+    // A made-up npm repository with one package that has every script, so every tool is built without reading the
+    // real repository
     public static NodeDetection Detection(string repositoryRoot)
     {
         NodePackage package = new(
             Name: SELF_TEST_PACKAGE,
             RelativeDirectory: NodePackage.ROOT_DIRECTORY,
-            Scripts: [NodeScripts.TEST]
-        );
+            Scripts: [NodeScripts.BUILD, NodeScripts.LINT, NodeScripts.TEST]
+        )
+        {
+            TestRunner = NodeTestRunner.Vitest,
+        };
         NodeRepository repository = new(
             RepositoryRoot: repositoryRoot,
             InstallRoots:

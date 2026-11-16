@@ -20,7 +20,17 @@ namespace Credfeto.Build.Node.Server.Tests.Protocol;
 
 public sealed class McpServerTests : TestBase
 {
-    private static readonly string[] AllTools = ["detect"];
+    private static readonly string[] AllTools =
+    [
+        "detect",
+        "restore",
+        "build",
+        "test",
+        "add_package",
+        "update_package",
+        "job_status",
+        "job_result",
+    ];
 
     [Fact]
     public async Task NpmRepositoryAdvertisesItsToolsAsync()
@@ -77,7 +87,12 @@ public sealed class McpServerTests : TestBase
         );
 
         await using ServiceProvider services = new ServiceCollection()
-            .AddNodeServer(environment: environment, detection: detection, debounce: TimeSpan.FromMilliseconds(100))
+            .AddNodeServer(
+                environment: environment,
+                detection: detection,
+                npm: TestTools.NoNpm,
+                debounce: TimeSpan.FromMilliseconds(100)
+            )
             .BuildServiceProvider();
 
         Pipe clientToServer = new();
