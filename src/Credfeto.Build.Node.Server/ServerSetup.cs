@@ -1,6 +1,8 @@
 using System;
 using Credfeto.Build.Core;
 using Credfeto.Build.Core.Configuration;
+using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Workspace;
 using Credfeto.Build.Server.Workspace;
@@ -19,6 +21,7 @@ public static class ServerSetup
         return services.AddNodeServer(
             environment: environment,
             detection: detection,
+            npm: NpmLocator.FromProcess(),
             debounce: RepositoryWatcher.DefaultDebounce
         );
     }
@@ -27,12 +30,18 @@ public static class ServerSetup
         this IServiceCollection services,
         BuildServerEnvironment environment,
         NodeDetection detection,
+        NpmLocator npm,
         TimeSpan debounce
     )
     {
         return services
             .AddBuildCore(environment)
-            .AddSingleton(_ => new NodeWorkspace(detection))
+            .AddSingleton(npm)
+            .AddSingleton(provider => new NodeWorkspace(
+                initial: detection,
+                runner: provider.GetRequiredService<IJobRunner>(),
+                npm: provider.GetRequiredService<NpmLocator>()
+            ))
             .AddSingleton(provider => new RepositoryWatcher(
                 repositoryRoot: environment.RepositoryRoot,
                 source: provider.GetRequiredService<NodeWorkspace>(),

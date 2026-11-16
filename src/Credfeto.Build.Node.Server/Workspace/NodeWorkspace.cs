@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Tools;
 using Credfeto.Build.Server.Workspace;
@@ -15,9 +17,9 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
 {
     private readonly LanguageWorkspace<NodeDetection> _workspace;
 
-    public NodeWorkspace(NodeDetection initial)
+    public NodeWorkspace(NodeDetection initial, IJobRunner runner, NpmLocator npm)
     {
-        ToolContext context = new(this);
+        ToolContext context = new(detection: this, runner: runner, npm: npm);
         this._workspace = new(
             initial: initial,
             language: new NodeWorkspaceLanguage(repositoryRoot: initial.RepositoryRoot, context: context)
@@ -72,6 +74,8 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
 
         _ = builder
             .Append(repository.Timeout.TotalMinutes.ToString(provider: CultureInfo.InvariantCulture))
+            .Append('|')
+            .Append(repository.TestScript)
             .Append('\n');
 
         foreach (NodeInstallRoot installRoot in repository.InstallRoots)
@@ -86,12 +90,18 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
 
         foreach (NodePackage package in repository.Packages)
         {
+            // With node.testScript set, whether a package has that script decides whether test runs it
+            bool hasTestScript = repository.TestScript is { } testScript && package.HasScript(testScript);
             _ = builder
                 .Append(package.Name)
                 .Append('|')
                 .Append(package.RelativeDirectory)
                 .Append('|')
+                .Append(package.InstallRoot)
+                .Append('|')
                 .AppendJoin(separator: ',', values: package.Scripts.Order(StringComparer.Ordinal))
+                .Append('|')
+                .Append(hasTestScript ? '1' : '0')
                 .Append('\n');
         }
 

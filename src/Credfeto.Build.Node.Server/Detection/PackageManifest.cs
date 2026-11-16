@@ -10,4 +10,12 @@ public sealed record PackageManifest(
     IReadOnlyList<string> Scripts,
     IReadOnlyList<string> Workspaces,
     string? PackageManager
-);
+)
+{
+    // Every script name, so an override can only select a script the package already has
+    public IReadOnlyList<string> ScriptNames { get; init; } = [];
+
+    public IReadOnlyList<NodeDependency> Dependencies { get; init; } = [];
+
+    public NodeTestRunner TestRunner { get; init; }
+}

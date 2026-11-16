@@ -1,3 +1,7 @@
+using System.Threading;
+using System.Threading.Tasks;
+using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Server.Tools.Exceptions;
 
@@ -5,12 +9,18 @@ namespace Credfeto.Build.Node.Server.Tools;
 
 public sealed class ToolContext
 {
-    public ToolContext(INodeDetectionSource detection)
+    public ToolContext(INodeDetectionSource detection, IJobRunner runner, NpmLocator npm)
     {
         this.Detection = detection;
+        this.Runner = runner;
+        this.Npm = npm;
     }
 
     public INodeDetectionSource Detection { get; }
+
+    public IJobRunner Runner { get; }
+
+    public NpmLocator Npm { get; }
 
     public static NodeRepository RepositoryOf(NodeDetection detection)
     {
@@ -18,5 +28,11 @@ public sealed class ToolContext
             ?? throw new ToolUnavailableException(
                 "There is no supported npm repository any more (" + detection.Reason + ")"
             );
+    }
+
+    // Every tool call detects the repository afresh, so a job never runs against packages that have gone
+    public async ValueTask<NodeRepository> CurrentRepositoryAsync(CancellationToken cancellationToken)
+    {
+        return RepositoryOf(await this.Detection.RefreshAsync(cancellationToken));
     }
 }

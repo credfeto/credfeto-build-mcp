@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Node.Server.Workspace;
@@ -38,7 +40,22 @@ public sealed class SelfTestTests : TestBase
         await using ServiceProvider provider = SelfTest.Services(Environment(folder)).BuildServiceProvider();
         NodeWorkspace workspace = provider.GetRequiredService<NodeWorkspace>();
 
-        Assert.Single(workspace.Tools);
+        Assert.Equal(
+            expected:
+            [
+                "detect",
+                "restore",
+                "build",
+                "lint",
+                "test",
+                "add_package",
+                "update_package",
+                "job_status",
+                "job_result",
+            ],
+            actual: workspace.Tools.Select(static tool => tool.ProtocolTool.Name),
+            comparer: StringComparer.Ordinal
+        );
     }
 
     private static BuildServerEnvironment Environment(TemporaryDirectory folder)

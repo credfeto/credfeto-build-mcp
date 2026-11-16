@@ -60,7 +60,11 @@ public sealed class NodeWorkspaceTests : TestBase, IDisposable
             repositoryRoot: this._repository.Path,
             cancellationToken: this.CancellationToken()
         );
-        using NodeWorkspace workspace = new(detection);
+        using NodeWorkspace workspace = new(
+            initial: detection,
+            runner: new RecordingJobRunner(),
+            npm: TestTools.FakeNpm
+        );
         await using RepositoryWatcher watcher = new(
             repositoryRoot: this._repository.Path,
             source: workspace,
