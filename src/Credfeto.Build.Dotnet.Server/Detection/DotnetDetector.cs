@@ -32,7 +32,7 @@ public static partial class DotnetDetector
             repositoryRoot: repositoryRoot,
             cancellationToken: cancellationToken
         );
-        LanguageOverrides? overrides = loaded.Overrides.Dotnet;
+        DotnetOverrides? overrides = loaded.Overrides.Dotnet;
 
         if (overrides?.Enabled == false)
         {
@@ -53,7 +53,7 @@ public static partial class DotnetDetector
         }
 
         (string? solution, string? overrideError) = FindSolution(repositoryRoot: repositoryRoot, overrides: overrides);
-        string? error = CombineErrors(first: loaded.Error, second: overrideError);
+        string? error = CombineErrors(first: loaded.DotnetErrors, second: overrideError);
 
         if (solution is null)
         {
@@ -77,7 +77,7 @@ public static partial class DotnetDetector
     private static async ValueTask<DotnetDetection> TryDescribeAsync(
         string repositoryRoot,
         string solution,
-        LanguageOverrides? overrides,
+        DotnetOverrides? overrides,
         string? overridesError,
         CancellationToken cancellationToken
     )
@@ -111,10 +111,15 @@ public static partial class DotnetDetector
 
     private static DotnetDetection NotDetected(string repositoryRoot, string reason, OverridesLoadResult loaded)
     {
-        return new(RepositoryRoot: repositoryRoot, Repository: null, Reason: reason, OverridesError: loaded.Error);
+        return new(
+            RepositoryRoot: repositoryRoot,
+            Repository: null,
+            Reason: reason,
+            OverridesError: loaded.DotnetErrors
+        );
     }
 
-    private static (string? Solution, string? Error) FindSolution(string repositoryRoot, LanguageOverrides? overrides)
+    private static (string? Solution, string? Error) FindSolution(string repositoryRoot, DotnetOverrides? overrides)
     {
         if (!string.IsNullOrWhiteSpace(overrides?.Solution))
         {
@@ -179,7 +184,7 @@ public static partial class DotnetDetector
     private static async ValueTask<DotnetRepository> DescribeAsync(
         string repositoryRoot,
         string solutionPath,
-        LanguageOverrides? overrides,
+        DotnetOverrides? overrides,
         CancellationToken cancellationToken
     )
     {

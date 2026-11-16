@@ -26,17 +26,28 @@ public static class CoverageMarkdown
         return builder.ToString();
     }
 
-    public static string FormatSection(CoverageSummary summary)
+    public static string FormatSection(CoverageSummary summary, CoverageLanguage language)
     {
         StringBuilder builder = new();
-        builder.Append("## .NET\n\n").Append("| Project | Line Coverage |\n").Append("| --- | --- |\n");
+        builder
+            .Append("## ")
+            .Append(language.Heading)
+            .Append("\n\n| ")
+            .Append(language.ComponentColumn)
+            .Append(" | Line Coverage |\n")
+            .Append("| --- | --- |\n");
 
         foreach (AssemblyCoverage assembly in summary.Assemblies)
         {
             builder.Append("| ").Append(assembly.Name).Append(" | ").Append(OneDecimalPlace(assembly)).Append("% |\n");
         }
 
-        builder.Append("| **Overall (.NET)** | **").Append(OneDecimalPlace(summary.Overall)).Append("%** |\n");
+        builder
+            .Append("| **")
+            .Append(language.OverallLabel)
+            .Append("** | **")
+            .Append(OneDecimalPlace(summary.Overall))
+            .Append("%** |\n");
 
         return builder.ToString();
     }
