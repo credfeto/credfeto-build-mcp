@@ -695,17 +695,19 @@ public sealed class JobRunnerTests : TestBase, IDisposable
     [Fact]
     public async Task ShutdownEndsAnOpenWaitAsync()
     {
-        GatedProcessLauncher gated = new();
-        JobRunner runner = this.CreateRunner(launcher: gated);
-        JobStatus started = await this.StartGatedAsync(runner: runner, gated: gated, "a");
+        // The job ignores the cancellation, as a process slow to die would, so only shutdown can end the wait
+        GatedProcessLauncher slowToStop = new(ignoresCancellation: true);
+        JobRunner runner = this.CreateRunner(launcher: slowToStop);
+        JobStatus started = await this.StartGatedAsync(runner: runner, gated: slowToStop, "a");
 
-        Task<bool> waiting = runner
-            .WaitForCompletionAsync(id: started.Id, maxWait: WaitLimit, cancellationToken: this.CancellationToken())
-            .AsTask();
-        await runner.DisposeAsync();
+        Task<bool> waiting = this.WaitForCompletionAsync(runner: runner, id: started.Id);
+        Task disposing = runner.DisposeAsync().AsTask();
 
-        _ = await waiting;
-        Assert.Equal(expected: JobState.Cancelled, actual: runner.FindStatus(started.Id)?.State);
+        Assert.False(condition: await waiting, userMessage: "shutdown ended the wait before the job ended");
+        Assert.Equal(expected: JobState.Running, actual: runner.FindStatus(started.Id)?.State);
+
+        slowToStop.Release("a");
+        await disposing;
     }
 
     [Fact]
@@ -737,6 +739,13 @@ public sealed class JobRunnerTests : TestBase, IDisposable
             expected: JobWaitOutcome.Signalled,
             actual: await this.WaitForChangeAsync(runner: runner, watch: second)
         );
+    }
+
+    private Task<bool> WaitForCompletionAsync(JobRunner runner, string id)
+    {
+        return runner
+            .WaitForCompletionAsync(id: id, maxWait: WaitLimit, cancellationToken: this.CancellationToken())
+            .AsTask();
     }
 
     private Task<JobWaitOutcome> WaitForChangeAsync(JobRunner runner, JobWatch watch)
