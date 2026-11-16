@@ -25,6 +25,9 @@ internal sealed class RunningJob : IAsyncDisposable
     // Swapped for a fresh one on every step change and completed at the end, so a waiter wakes on the next change
     private TaskCompletionSource _changed = NewChangeSignal();
 
+    // Completed once the job has recorded its end state; unlike Completion it never faults
+    private readonly TaskCompletionSource _ended = NewChangeSignal();
+
     public RunningJob(
         string id,
         long sequence,
@@ -45,6 +48,7 @@ internal sealed class RunningJob : IAsyncDisposable
         this.Cancellation = cancellation;
         this._timeProvider = timeProvider;
         this._started = timeProvider.GetTimestamp();
+        this.Ended = this._ended.Task;
     }
 
     public string Id { get; }
@@ -62,6 +66,8 @@ internal sealed class RunningJob : IAsyncDisposable
     public CancellationTokenSource Cancellation { get; }
 
     public Task Completion { get; set; } = Task.CompletedTask;
+
+    public Task Ended { get; }
 
     public bool IsRunning
     {
@@ -261,5 +267,6 @@ internal sealed class RunningJob : IAsyncDisposable
         }
 
         changed.TrySetResult();
+        this._ended.TrySetResult();
     }
 }

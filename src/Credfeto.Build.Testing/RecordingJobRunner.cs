@@ -59,7 +59,8 @@ public sealed class RecordingJobRunner : IJobRunner
 
     public JobWatch? Watch(string id)
     {
-        return this.FindStatus(id) is { } status ? new(Status: status, Changed: Task.CompletedTask) : null;
+        // A recorded job never changes, so its signal never fires
+        return this.FindStatus(id) is { } status ? new(Status: status, Changed: new TaskCompletionSource().Task) : null;
     }
 
     public ValueTask<bool> WaitForCompletionAsync(string id, TimeSpan maxWait, CancellationToken cancellationToken)
@@ -67,12 +68,14 @@ public sealed class RecordingJobRunner : IJobRunner
         return ValueTask.FromResult(this._statuses.ContainsKey(id));
     }
 
-    public ValueTask<JobWaitOutcome> WaitForChangeAsync(
+    public async ValueTask<JobWaitOutcome> WaitForChangeAsync(
         JobWatch watch,
         TimeSpan maxWait,
         CancellationToken cancellationToken
     )
     {
-        return ValueTask.FromResult(JobWaitOutcome.Signalled);
+        await Task.Delay(delay: maxWait, cancellationToken: cancellationToken);
+
+        return JobWaitOutcome.TimedOut;
     }
 }

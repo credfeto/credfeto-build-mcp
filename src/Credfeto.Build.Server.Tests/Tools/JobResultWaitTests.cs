@@ -127,15 +127,21 @@ public sealed class JobResultWaitTests : TestBase, IDisposable
         this._launcher.Release("a");
     }
 
-    [Fact]
-    public async Task CancellingTheCallEndsOnlyTheWaitAsync()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CancellingTheCallEndsOnlyTheWaitAsync(bool withProgress)
     {
         await using JobRunner runner = this.CreateRunner();
         string id = await this.StartAsync(runner, "a");
         using CancellationTokenSource cancellation = new();
 
         Task<CallToolResult> call = new JobResultTool(runner: runner, timeProvider: this._time)
-            .CallAsync(arguments: Arguments.Text(name: "id", value: id), cancellationToken: cancellation.Token)
+            .CallAsync(
+                arguments: Arguments.Text(name: "id", value: id),
+                progress: new RecordingProgress(enabled: withProgress),
+                cancellationToken: cancellation.Token
+            )
             .AsTask();
         await cancellation.CancelAsync();
 
@@ -181,7 +187,7 @@ public sealed class JobResultWaitTests : TestBase, IDisposable
         );
         Assert.Equal(expected: "1 of 2 steps done; running b", actual: progress.Reports[1].Message);
 
-        await this.AdvanceUntilAsync(() => progress.Reports.Count == 3);
+        await this.AdvanceUntilAsync(() => progress.Reports.Count >= 3);
         Assert.Equal(expected: "1 of 2 steps done; running b", actual: progress.Reports[2].Message);
 
         this._launcher.Release("b");

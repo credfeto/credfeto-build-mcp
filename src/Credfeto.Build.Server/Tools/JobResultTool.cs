@@ -80,17 +80,6 @@ public sealed class JobResultTool : BuildTool
         CancellationToken cancellationToken
     )
     {
-        if (!progress.Enabled)
-        {
-            _ = await this._runner.WaitForCompletionAsync(
-                id: watch.Status.Id,
-                maxWait: wait,
-                cancellationToken: cancellationToken
-            );
-
-            return;
-        }
-
         long started = this._timeProvider.GetTimestamp();
         double reported = 0;
 
@@ -107,18 +96,22 @@ public sealed class JobResultTool : BuildTool
                 return;
             }
 
-            // MCP wants each notification's progress to be larger than the last; the job's running time is, and the
-            // steps go in the message
-            reported = Math.Max(val1: current.Status.DurationSeconds, val2: reported + 0.1);
-            await progress.ReportAsync(
-                progress: reported,
-                message: Describe(current.Status),
-                cancellationToken: cancellationToken
-            );
+            if (progress.Enabled)
+            {
+                // MCP wants each notification's progress to be larger than the last; the job's running time is, and
+                // the steps go in the message
+                reported = Math.Max(val1: current.Status.DurationSeconds, val2: reported + 0.1);
+                await progress.ReportAsync(
+                    progress: reported,
+                    message: Describe(current.Status),
+                    cancellationToken: cancellationToken
+                );
+            }
 
+            // Without a client to tell, only the job's end matters, so the wait wakes on step changes alone
             JobWaitOutcome outcome = await this._runner.WaitForChangeAsync(
                 watch: current,
-                maxWait: remaining < ProgressInterval ? remaining : ProgressInterval,
+                maxWait: progress.Enabled && remaining > ProgressInterval ? ProgressInterval : remaining,
                 cancellationToken: cancellationToken
             );
 

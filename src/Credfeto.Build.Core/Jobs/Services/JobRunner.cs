@@ -121,7 +121,7 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
     )
     {
         JobWaitOutcome outcome = await this.WaitForAsync(
-            signal: job.Completion,
+            signal: job.Ended,
             maxWait: maxWait,
             cancellationToken: cancellationToken
         );
@@ -143,9 +143,8 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
 
         try
         {
-            // WhenAny never faults: the job records its own end state, so a job that failed reads as finished
-            _ = await Task.WhenAny(signal)
-                .WaitAsync(timeout: maxWait, timeProvider: this._timeProvider, cancellationToken: stop.Token);
+            // The signals never fault, and waiting on them directly leaves nothing attached once a wait times out
+            await signal.WaitAsync(timeout: maxWait, timeProvider: this._timeProvider, cancellationToken: stop.Token);
 
             return JobWaitOutcome.Signalled;
         }
