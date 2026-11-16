@@ -218,7 +218,12 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         AssertLogOpen(started.LogPath);
 
         this._time.Advance(JobTimeout + TimeSpan.FromSeconds(1));
-        await runner.WaitForCompletionAsync(id: started.Id, cancellationToken: this.CancellationToken());
+        bool finished = await runner.WaitForCompletionAsync(
+            id: started.Id,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+        Assert.True(condition: finished, userMessage: "The killed job should have finished");
 
         JobResult? result = runner.FindResult(started.Id);
         Assert.NotNull(result);
@@ -605,6 +610,185 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         }
     }
 
+    [Fact]
+    public async Task AWaitThatRunsOutLeavesTheJobRunningAsync()
+    {
+        BlockingProcessLauncher launcher = new();
+        await using JobRunner runner = this.CreateRunner(launcher: launcher);
+        JobStatus started = await runner.StartAsync(Definition(continueOnFailure: false, parser: null, "a"));
+        _ = await launcher.WaitForStepAsync(this.CancellationToken());
+
+        Task<bool> wait = runner
+            .WaitForCompletionAsync(
+                id: started.Id,
+                maxWait: TimeSpan.FromSeconds(10),
+                cancellationToken: this.CancellationToken()
+            )
+            .AsTask();
+        Assert.False(condition: wait.IsCompleted, userMessage: "The wait should last until its deadline");
+
+        this._time.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.False(condition: await wait, userMessage: "The job was still running when the wait ran out");
+        Assert.Equal(expected: JobState.Running, actual: runner.FindStatus(started.Id)?.State);
+
+        launcher.Release();
+        Assert.True(
+            condition: await runner.WaitForCompletionAsync(
+                id: started.Id,
+                maxWait: Timeout.InfiniteTimeSpan,
+                cancellationToken: this.CancellationToken()
+            ),
+            userMessage: "The job should finish once released"
+        );
+        Assert.Equal(expected: JobState.Succeeded, actual: runner.FindStatus(started.Id)?.State);
+    }
+
+    [Fact]
+    public async Task WaitingForAnUnknownJobReturnsAtOnceAsync()
+    {
+        await using JobRunner runner = this.CreateRunner();
+
+        bool completed = await runner.WaitForCompletionAsync(
+            id: "missing",
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+        bool changed = await runner.WaitForChangeAsync(
+            id: "missing",
+            stepsCompleted: 0,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+
+        Assert.False(condition: completed, userMessage: "An unknown job never finishes");
+        Assert.False(condition: changed, userMessage: "An unknown job never finishes");
+    }
+
+    [Fact]
+    public async Task ACancelledWaitThrowsAndLeavesTheJobRunningAsync()
+    {
+        BlockingProcessLauncher launcher = new();
+        await using JobRunner runner = this.CreateRunner(launcher: launcher);
+        JobStatus started = await runner.StartAsync(Definition(continueOnFailure: false, parser: null, "a"));
+        _ = await launcher.WaitForStepAsync(this.CancellationToken());
+
+        using CancellationTokenSource caller = new();
+
+        // Cancelled after the wait has begun, as when a client gives up on a job_result that is still waiting
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            Task<bool> wait = runner
+                .WaitForChangeAsync(
+                    id: started.Id,
+                    stepsCompleted: 0,
+                    maxWait: Timeout.InfiniteTimeSpan,
+                    cancellationToken: caller.Token
+                )
+                .AsTask();
+            await caller.CancelAsync();
+            _ = await wait;
+        });
+        Assert.Equal(expected: JobState.Running, actual: runner.FindStatus(started.Id)?.State);
+
+        launcher.Release();
+        Assert.True(
+            condition: await runner.WaitForCompletionAsync(
+                id: started.Id,
+                maxWait: Timeout.InfiniteTimeSpan,
+                cancellationToken: this.CancellationToken()
+            ),
+            userMessage: "The job should still finish after a caller gave up waiting for it"
+        );
+        Assert.Equal(expected: JobState.Succeeded, actual: runner.FindStatus(started.Id)?.State);
+    }
+
+    [Fact]
+    public async Task ShuttingDownEndsAnOpenWaitAsync()
+    {
+        BlockingProcessLauncher launcher = new();
+        JobRunner runner = this.CreateRunner(launcher: launcher);
+        JobStatus started = await runner.StartAsync(Definition(continueOnFailure: false, parser: null, "a"));
+        _ = await launcher.WaitForStepAsync(this.CancellationToken());
+
+        Task<bool> wait = runner
+            .WaitForChangeAsync(
+                id: started.Id,
+                stepsCompleted: 0,
+                maxWait: Timeout.InfiniteTimeSpan,
+                cancellationToken: this.CancellationToken()
+            )
+            .AsTask();
+        Assert.False(condition: wait.IsCompleted, userMessage: "The wait should be open while the step runs");
+
+        await runner.DisposeAsync();
+
+        // Shutting down is not the caller giving up, so the wait ends without an error
+        _ = await wait;
+
+        // A wait that starts after shutdown has nothing left to wait for, so it answers at once
+        Assert.True(
+            condition: await runner.WaitForChangeAsync(
+                id: started.Id,
+                stepsCompleted: 0,
+                maxWait: Timeout.InfiniteTimeSpan,
+                cancellationToken: this.CancellationToken()
+            ),
+            userMessage: "A wait after shutdown should answer at once"
+        );
+    }
+
+    [Fact]
+    public async Task AFinishedStepEndsAWaitForChangeAsync()
+    {
+        BlockingProcessLauncher launcher = new();
+        await using JobRunner runner = this.CreateRunner(launcher: launcher);
+        JobStatus started = await runner.StartAsync(Definition(continueOnFailure: false, parser: null, "a", "b"));
+        Assert.Equal(expected: "a", actual: await launcher.WaitForStepAsync(this.CancellationToken()));
+
+        Task<bool> wait = runner
+            .WaitForChangeAsync(
+                id: started.Id,
+                stepsCompleted: 0,
+                maxWait: Timeout.InfiniteTimeSpan,
+                cancellationToken: this.CancellationToken()
+            )
+            .AsTask();
+        Assert.False(condition: wait.IsCompleted, userMessage: "Nothing has changed while the first step runs");
+
+        launcher.Release();
+
+        Assert.False(condition: await wait, userMessage: "The job is still running its second step");
+        Assert.Equal(expected: 1, actual: runner.FindStatus(started.Id)?.StepsCompleted);
+        Assert.Equal(expected: "b", actual: await launcher.WaitForStepAsync(this.CancellationToken()));
+
+        bool stale = await runner.WaitForChangeAsync(
+            id: started.Id,
+            stepsCompleted: 0,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+        Assert.False(condition: stale, userMessage: "A caller behind the job returns at once while it still runs");
+
+        launcher.Release();
+        Assert.True(
+            condition: await runner.WaitForCompletionAsync(
+                id: started.Id,
+                maxWait: Timeout.InfiniteTimeSpan,
+                cancellationToken: this.CancellationToken()
+            ),
+            userMessage: "The job should finish once both steps are released"
+        );
+
+        bool finished = await runner.WaitForChangeAsync(
+            id: started.Id,
+            stepsCompleted: 2,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+        Assert.True(condition: finished, userMessage: "A finished job returns at once");
+    }
+
     private static async ValueTask AssertLogClosedAsync(string logPath)
     {
         // While the server holds the log open it keeps a shared lock on it, so only a closed log opens exclusively
@@ -631,10 +815,10 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         );
     }
 
-    private JobRunner CreateRunner(JobRunnerSettings? settings = null)
+    private JobRunner CreateRunner(JobRunnerSettings? settings = null, IProcessLauncher? launcher = null)
     {
         return new(
-            launcher: this._launcher,
+            launcher: launcher ?? this._launcher,
             masker: new OutputMasker(new Dictionary<string, string>(StringComparer.Ordinal)),
             settings: settings ?? JobRunnerSettings.Create(this._logs.Path),
             timeProvider: this._time
@@ -644,7 +828,12 @@ public sealed class JobRunnerTests : TestBase, IDisposable
     private async ValueTask<JobResult> RunAsync(JobRunner runner, JobDefinition definition)
     {
         JobStatus status = await runner.StartAsync(definition);
-        await runner.WaitForCompletionAsync(id: status.Id, cancellationToken: this.CancellationToken());
+        bool finished = await runner.WaitForCompletionAsync(
+            id: status.Id,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+        Assert.True(condition: finished, userMessage: "An unbounded wait should only return once the job has finished");
 
         return runner.FindResult(status.Id) ?? throw new InvalidOperationException("The job vanished");
     }

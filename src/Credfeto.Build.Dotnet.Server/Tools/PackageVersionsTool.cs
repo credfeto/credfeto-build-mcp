@@ -81,6 +81,7 @@ public sealed partial class PackageVersionsTool : BuildTool
 
     protected override async ValueTask<string> ExecuteAsync(
         ToolArguments arguments,
+        IToolProgress progress,
         CancellationToken cancellationToken
     )
     {

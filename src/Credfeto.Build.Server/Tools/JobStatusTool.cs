@@ -19,7 +19,7 @@ public sealed class JobStatusTool : BuildTool
         : base(
             name: JobToolNames.JOB_STATUS,
             title: "Job status",
-            description: "Reports whether a job is still running, how long it has run and which step it is on",
+            description: "A single, instant look at whether a job is still running, how long it has run and which step it is on; to wait for a job, call job_result",
             schema: [id],
             readOnly: true
         )
@@ -28,7 +28,11 @@ public sealed class JobStatusTool : BuildTool
         this._id = id;
     }
 
-    protected override ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        IToolProgress progress,
+        CancellationToken cancellationToken
+    )
     {
         JobStatus status = this._runner.FindStatus(arguments.GetJobId(this._id)) ?? throw new JobNotFoundException();
 
