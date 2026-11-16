@@ -369,16 +369,16 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
 
         try
         {
-            string? existing = File.Exists(path)
-                ? await File.ReadAllTextAsync(path: path, cancellationToken: cancellationToken)
-                : null;
-            string merged = CoverageFile.Merge(
-                existing: existing,
-                dotnetSection: CoverageMarkdown.FormatSection(measured),
+            CoverageLanguage language = job.Definition.CoverageLanguage;
+            await CoverageFile.WriteSectionAsync(
+                path: path,
+                language: language,
+                section: CoverageMarkdown.FormatSection(summary: measured, language: language),
                 headSha: headSha,
-                capturedOn: DateOnly.FromDateTime(this._timeProvider.GetUtcNow().UtcDateTime)
+                capturedOn: DateOnly.FromDateTime(this._timeProvider.GetUtcNow().UtcDateTime),
+                timeProvider: this._timeProvider,
+                cancellationToken: cancellationToken
             );
-            await File.WriteAllTextAsync(path: path, contents: merged, cancellationToken: cancellationToken);
             job.SetCoverageReport(path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

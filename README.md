@@ -157,7 +157,10 @@ to its own assembly by `UnitTests.props`, so an assembly is measured only by its
 With `write_report` set to `true`, a run of every unit test project also writes `COVERAGE.md` at the repository root
 once it succeeds. Only the `## .NET` section (each project to one decimal place, then `**Overall (.NET)**`) and the
 `Captured at commit` line, which names the measured head SHA and the date, are replaced; every other section is kept
-byte for byte. A missing file is created with just the `.NET` section and that line. Nothing is written when a test
+byte for byte. A missing `.NET` section is inserted before the other language sections (the order is .NET, Node,
+Python, Shell). A missing file is created with just the `.NET` section and that line. The update holds an exclusive
+lock on the file from the read to the write, so another build server writing its own section at the same moment
+waits rather than losing either section. Nothing is written when a test
 run fails, a coverage file is missing or unreadable, or the head SHA cannot be read; `coverageErrors` then says why.
 `write_report` with a single project is refused, since one project's figures are not the repository's Overall.
 
@@ -178,8 +181,14 @@ A repository can narrow what the server does with `.ai/commands.json`:
 
 The file can only select among what detection finds, or narrow it. It can never add a command, an argument or an
 executable. `enabled: false` turns the server off for the repository. `solution` must be a `.slnx` or `.sln` inside
-the repository. `timeoutMinutes` is clamped to 1-240. Unknown properties, invalid JSON or a file over 64 KiB make the
-server ignore the whole file, and `detect` reports why.
+the repository. `timeoutMinutes` is clamped to 1-240.
+
+Each language's section is read on its own, so the file can also carry a `node` section (`enabled`, `packages`,
+`testScript`, `coverageScript`, `coverageFile`, `timeoutMinutes`) for the Node server, and a `python` section, without
+the .NET server rejecting it. An unknown property inside the `dotnet` section, or a `dotnet` value of the wrong type,
+makes the server ignore only that section. An unknown top-level setting is reported but leaves the known sections in
+force. Invalid JSON or a file over 64 KiB make the server ignore the whole file. `detect` reports why in every case,
+without echoing the file's content.
 
 ### Installation
 

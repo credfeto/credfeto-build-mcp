@@ -149,6 +149,12 @@ public sealed class CoverageFileTests : TestBase
 
     private static string Merge(string? existing)
     {
-        return CoverageFile.Merge(existing: existing, dotnetSection: SECTION, headSha: SHA, capturedOn: CapturedOn);
+        return CoverageFile.Merge(
+            existing: existing,
+            language: CoverageLanguage.Dotnet,
+            section: SECTION,
+            headSha: SHA,
+            capturedOn: CapturedOn
+        );
     }
 }
