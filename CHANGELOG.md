@@ -13,7 +13,6 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Added
 ### Fixed
 ### Changed
-- Core is ready for a second language server: `.ai/commands.json` reads each language's section on its own, so a `node` section (`enabled`, `packages`, `testScript`, `coverageScript`, `coverageFile`, `timeoutMinutes`) or a `python` section no longer makes the .NET server ignore the whole file, and a bad section only voids that language's settings; `COVERAGE.md` sections are per language (`.NET`, `Node`), a missing one is inserted in the documented order (.NET, Node, Python, Shell), and a section is written under an exclusive lock so two servers finishing together keep both sections; the repository watcher takes a watch plan (exact file names, recursive or not, which directories), so a Node server can watch a few directories without one kernel watch per `node_modules` directory. The .NET server's tools, schemas and figures are unchanged (#37)
 ### Deprecated
 ### Removed
 ### Deployment Changes
@@ -21,6 +20,10 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
+## [0.0.7] - 2026-11-16
+### Changed
+- Core is ready for a second language server: `.ai/commands.json` reads each language's section on its own, so a `node` section (`enabled`, `packages`, `testScript`, `coverageScript`, `coverageFile`, `timeoutMinutes`) or a `python` section no longer makes the .NET server ignore the whole file, and a bad section only voids that language's settings; `COVERAGE.md` sections are per language (`.NET`, `Node`), a missing one is inserted in the documented order (.NET, Node, Python, Shell), and a section is written under an exclusive lock so two servers finishing together keep both sections; the repository watcher takes a watch plan (exact file names, recursive or not, which directories), so a Node server can watch a few directories without one kernel watch per `node_modules` directory. The .NET server's tools, schemas and figures are unchanged (#37)
 
 ## [0.0.6] - 2026-11-16
 ### Added
