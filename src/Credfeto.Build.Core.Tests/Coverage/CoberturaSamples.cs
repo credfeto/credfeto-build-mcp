@@ -63,4 +63,40 @@ internal static class CoberturaSamples
           </packages>
         </coverage>
         """;
+
+    // What Vitest's cobertura reporter writes: one package per directory, relative file names, and a sources element
+    public const string VITEST = """
+        <?xml version="1.0" ?>
+        <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
+        <coverage lines-valid="5" lines-covered="4" line-rate="0.8" branches-valid="0" branches-covered="0" branch-rate="1" timestamp="1" complexity="0" version="0.1">
+          <sources>
+            <source>/repo/packages/web</source>
+          </sources>
+          <packages>
+            <package name="main" line-rate="1" branch-rate="1">
+              <classes>
+                <class name="index.ts" filename="index.ts" line-rate="1" branch-rate="1">
+                  <methods/>
+                  <lines>
+                    <line number="1" hits="1"/>
+                    <line number="2" hits="3"/>
+                  </lines>
+                </class>
+              </classes>
+            </package>
+            <package name="src.util" line-rate="0.6666" branch-rate="1">
+              <classes>
+                <class name="format.ts" filename="src/util/format.ts" line-rate="0.6666" branch-rate="1">
+                  <methods/>
+                  <lines>
+                    <line number="1" hits="1"/>
+                    <line number="2" hits="0"/>
+                    <line number="3" hits="2"/>
+                  </lines>
+                </class>
+              </classes>
+            </package>
+          </packages>
+        </coverage>
+        """;
 }

@@ -22,11 +22,13 @@ public static class CoberturaParser
 
     public static async ValueTask<CoberturaReport> ParseAsync(Stream stream, CancellationToken cancellationToken)
     {
-        // DTDs and external entities are refused: a coverage file is build output, but it is still parsed as
+        // A DOCTYPE is skipped, never read: Vitest's (istanbul's) cobertura reporter writes one naming the external
+        // DTD, so it cannot be refused, but nothing in it is fetched or expanded, and an entity it declares is unknown
+        // to the reader, so referencing one fails. A coverage file is build output, but it is still parsed as
         // untrusted input
         XmlReaderSettings settings = new()
         {
-            DtdProcessing = DtdProcessing.Prohibit,
+            DtdProcessing = DtdProcessing.Ignore,
             XmlResolver = null,
             IgnoreComments = true,
             IgnoreWhitespace = true,
@@ -42,7 +44,10 @@ public static class CoberturaParser
         }
         catch (XmlException exception)
         {
-            throw new InvalidCoberturaException(message: "The Cobertura report is not well-formed XML", innerException: exception);
+            throw new InvalidCoberturaException(
+                message: "The Cobertura report is not well-formed XML",
+                innerException: exception
+            );
         }
     }
 
@@ -69,7 +74,10 @@ public static class CoberturaParser
 
                     break;
                 case "package":
-                    currentPackage = GetOrAddPackage(packages: packages, name: RequiredAttribute(reader: reader, name: "name"));
+                    currentPackage = GetOrAddPackage(
+                        packages: packages,
+                        name: RequiredAttribute(reader: reader, name: "name")
+                    );
 
                     break;
                 case "class":
@@ -128,7 +136,9 @@ public static class CoberturaParser
         string? value = reader.GetAttribute(name);
 
         return string.IsNullOrEmpty(value)
-            ? throw new InvalidCoberturaException("A Cobertura " + reader.LocalName + " element has no " + name + " attribute")
+            ? throw new InvalidCoberturaException(
+                "A Cobertura " + reader.LocalName + " element has no " + name + " attribute"
+            )
             : value;
     }
 

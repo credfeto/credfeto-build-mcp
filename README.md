@@ -282,7 +282,7 @@ Not in this first version:
 
 `Credfeto.Build.Node.Server` (command `credfeto-build-node`, registered as the `build-node` MCP server) is the second
 language server. It is built on `Credfeto.Build.Server`, like the .NET server. It detects npm repositories and
-restores, builds, lints and tests them, and adds or updates their dependencies, as jobs. Coverage comes later.
+restores, builds, lints, tests and measures coverage for them, and adds or updates their dependencies, as jobs.
 
 ### Node detection
 
@@ -331,6 +331,7 @@ watched directory, or by the next `detect` call, which always detects afresh.
 | `build` | `package` | `npm run build`; offered only when some package has a `build` script. |
 | `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
 | `test` | `scope` (`unit` default, `all`), `package` | `unit` runs `test:noe2e` where a package has it (as the pre-commit hook does), otherwise `test`; `all` runs `test`. `node.testScript` replaces the choice. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
+| `coverage` | `package`; `write_report`: `false` (default) or `true`, with `package` `all` only | Runs the package's own coverage script and reads the Cobertura report it writes; offered only when some package has a `test:coverage` script, or the script `node.coverageScript` names. See Node coverage below. |
 | `add_package` | `package_id`, `version` (optional), `dev`, `package` | `npm install <id>@<version>` into one package's `package.json` (`--save-dev` with `dev`), then lists the version installed. |
 | `update_package` | `package_id`, `version` (optional, `latest` when left out), `package` (`all` default) | `npm install <id>@<version>` in each chosen package whose `package.json` declares it, keeping its section, then lists the version installed. |
 | `job_status`, `job_result` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
@@ -350,6 +351,25 @@ Every tool except `detect`, `job_status` and `job_result` starts a job and retur
 - **Package tools:** `package_id` must be an npm registry name and `version` a version, range or dist-tag, both
   matched against fixed patterns, so no URL, path, git or alias specification reaches npm. Every install passes
   `--ignore-scripts`.
+
+### Node coverage
+
+The `coverage` tool only runs a script the repository already has: `test:coverage`, or the script
+`node.coverageScript` names, in each chosen package that has it. The server never adds a coverage command or reporter
+flags of its own, so what is measured is exactly what the repository configured; a package with neither script gets
+no coverage tool.
+
+- **Report:** the script must write a Cobertura report, as Vitest's `cobertura` reporter does. The server reads
+  `coverage/cobertura-coverage.xml` in the package's directory, or `node.coverageFile` (a relative path inside the
+  package; an absolute path or one with a `..`, `.` or empty segment is refused with an overrides error and the
+  default used). A report from an earlier run is deleted first.
+- **Figures:** each package is one row, named after the package, with all of its report's directories merged; the
+  shared Cobertura parser and aggregator give per-package and Overall line coverage. The report's `DOCTYPE` is
+  skipped, never fetched or expanded.
+- **`write_report`:** a successful run of every package replaces the `## Node` section and the commit line of
+  `COVERAGE.md` at the repository root, with one decimal place and the same table as the `.NET` section, and leaves
+  every other section as it is. It is not written when a run fails, a report is missing or unreadable, or the head
+  SHA cannot be read; `coverageErrors` says why.
 
 ### Installing and running the Node server
 

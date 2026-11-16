@@ -40,6 +40,18 @@ public sealed class CoverageAggregatorTests : TestBase
     }
 
     [Fact]
+    public async Task AVitestReportAsOneComponentIsOneRowAsync()
+    {
+        CoberturaReport report = await this.ParseAsync(CoberturaSamples.VITEST);
+
+        CoverageSummary summary = CoverageAggregator.Combine([report.AsComponent("@example/web")]);
+
+        // Its two directory packages (main and src.util) become the one npm package's row
+        Assert.Equal(expected: new("@example/web", 4, 5, 80d), actual: Assert.Single(summary.Assemblies));
+        Assert.Equal(expected: new(CoverageAggregator.OVERALL, 4, 5, 80d), actual: summary.Overall);
+    }
+
+    [Fact]
     public static void NoReportsGiveZeroOverall()
     {
         CoverageSummary summary = CoverageAggregator.Combine([]);

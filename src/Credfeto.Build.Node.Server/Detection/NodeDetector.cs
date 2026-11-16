@@ -81,7 +81,8 @@ public static class NodeDetector
             packages: scan.Packages,
             overrides: overrides
         );
-        string? error = Combine(first: loadErrors, second: packagesError);
+        (string? coverageFile, string? coverageFileError) = ValidCoverageFile(overrides);
+        string? error = Combine(first: Combine(first: loadErrors, second: packagesError), second: coverageFileError);
 
         if (packages.Count == 0)
         {
@@ -107,6 +108,8 @@ public static class NodeDetector
         )
         {
             TestScript = overrides?.TestScript,
+            CoverageScript = overrides?.CoverageScript,
+            CoverageFile = coverageFile,
         };
 
         return new(
@@ -146,6 +149,29 @@ public static class NodeDetector
                 kept,
                 "node.packages names packages that were not found: " + string.Join(separator: ", ", value: unknown)
             );
+    }
+
+    // A coverage file outside the package would let the overrides point the report reader anywhere, so it is refused
+    // and the default used; the value is not repeated in the error
+    private static (string? File, string? Error) ValidCoverageFile(NodeOverrides? overrides)
+    {
+        if (overrides?.CoverageFile is not { } file)
+        {
+            return (null, null);
+        }
+
+        return IsInsidePackage(file)
+            ? (file, null)
+            : (null, "node.coverageFile must be a relative path inside the package, so the default is used");
+    }
+
+    // Relative, with no empty, . or .. segment and no backslash, so the path cannot leave the package's directory
+    private static bool IsInsidePackage(string file)
+    {
+        return !string.IsNullOrWhiteSpace(file)
+            && !Path.IsPathRooted(file)
+            && !file.Contains(value: '\\', comparisonType: StringComparison.Ordinal)
+            && file.Split('/').All(static segment => segment.Length != 0 && segment is not "." and not "..");
     }
 
     private static NodeDetection NotDetected(

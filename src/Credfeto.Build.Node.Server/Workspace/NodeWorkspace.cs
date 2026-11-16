@@ -76,6 +76,10 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
             .Append(repository.Timeout.TotalMinutes.ToString(provider: CultureInfo.InvariantCulture))
             .Append('|')
             .Append(repository.TestScript)
+            .Append('|')
+            .Append(repository.CoverageScript)
+            .Append('|')
+            .Append(repository.CoverageFile)
             .Append('\n');
 
         foreach (NodeInstallRoot installRoot in repository.InstallRoots)
@@ -92,6 +96,8 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
         {
             // With node.testScript set, whether a package has that script decides whether test runs it
             bool hasTestScript = repository.TestScript is { } testScript && package.HasScript(testScript);
+            bool hasCoverageScript =
+                CoverageScripts.For(package: package, overrideScript: repository.CoverageScript) is not null;
             _ = builder
                 .Append(package.Name)
                 .Append('|')
@@ -102,6 +108,7 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
                 .AppendJoin(separator: ',', values: package.Scripts.Order(StringComparer.Ordinal))
                 .Append('|')
                 .Append(hasTestScript ? '1' : '0')
+                .Append(hasCoverageScript ? '1' : '0')
                 .Append('\n');
         }
 

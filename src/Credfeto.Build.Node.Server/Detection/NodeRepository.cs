@@ -14,4 +14,11 @@ public sealed record NodeRepository(
 {
     // node.testScript from the overrides: the script test runs instead of the default choice, where a package has it
     public string? TestScript { get; init; }
+
+    // node.coverageScript: the script coverage runs instead of test:coverage, where a package has it
+    public string? CoverageScript { get; init; }
+
+    // node.coverageFile: where a package's Cobertura report is written, relative to the package's directory;
+    // null for the Vitest default
+    public string? CoverageFile { get; init; }
 }

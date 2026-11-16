@@ -312,18 +312,22 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         {
             if (!File.Exists(file))
             {
-                errors.Add("No coverage file was produced: " + Path.GetFileName(file));
+                errors.Add("No coverage file was produced: " + Describe(definition: job.Definition, file: file));
 
                 continue;
             }
 
             try
             {
-                reports.Add(await CoberturaParser.ParseFileAsync(path: file, cancellationToken: cancellationToken));
+                CoberturaReport report = await CoberturaParser.ParseFileAsync(
+                    path: file,
+                    cancellationToken: cancellationToken
+                );
+                reports.Add(Component(definition: job.Definition, file: file, report: report));
             }
             catch (Exception exception) when (exception is InvalidCoberturaException or IOException)
             {
-                errors.Add(Path.GetFileName(file) + ": " + exception.Message);
+                errors.Add(Describe(definition: job.Definition, file: file) + ": " + exception.Message);
             }
         }
 
@@ -332,6 +336,25 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
 
         // Only a measurement of every project is complete; a partial one would understate the overall figure
         return errors.Count == 0 ? coverage : null;
+    }
+
+    // Every Node package's report has the same file name, so a file a component is named for is described by that
+    private static string Describe(JobDefinition definition, string file)
+    {
+        return
+            definition.CoverageComponents is { } components
+            && components.TryGetValue(key: file, value: out string? component)
+            ? component + " (" + Path.GetFileName(file) + ")"
+            : Path.GetFileName(file);
+    }
+
+    private static CoberturaReport Component(JobDefinition definition, string file, CoberturaReport report)
+    {
+        return
+            definition.CoverageComponents is { } components
+            && components.TryGetValue(key: file, value: out string? component)
+            ? report.AsComponent(component)
+            : report;
     }
 
     private async ValueTask WriteCoverageReportAsync(

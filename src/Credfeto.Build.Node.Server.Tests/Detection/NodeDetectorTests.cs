@@ -256,6 +256,44 @@ public sealed class NodeDetectorTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task TheCoverageOverridesAreCarriedToTheRepositoryAsync()
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        await this.WriteOverridesAsync(
+            """{ "node": { "coverageScript": "coverage:ci", "coverageFile": "reports/cobertura.xml" } }"""
+        );
+
+        NodeDetection detection = await this.DetectAsync();
+
+        NodeRepository repository = Assert.IsType<NodeRepository>(detection.Repository);
+        Assert.Equal(expected: "coverage:ci", actual: repository.CoverageScript);
+        Assert.Equal(expected: "reports/cobertura.xml", actual: repository.CoverageFile);
+        Assert.Null(detection.OverridesError);
+    }
+
+    [Theory]
+    [InlineData("/etc/coverage.xml")]
+    [InlineData("../other/coverage.xml")]
+    [InlineData("coverage/../../coverage.xml")]
+    [InlineData("coverage//cobertura.xml")]
+    [InlineData(@"coverage\\cobertura.xml")]
+    [InlineData(" ")]
+    public async Task ACoverageFileOutsideThePackageIsRefusedAsync(string coverageFile)
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        await this.WriteOverridesAsync("{ \"node\": { \"coverageFile\": \"" + coverageFile + "\" } }");
+
+        NodeDetection detection = await this.DetectAsync();
+
+        NodeRepository repository = Assert.IsType<NodeRepository>(detection.Repository);
+        Assert.Null(repository.CoverageFile);
+        Assert.Equal(
+            expected: "node.coverageFile must be a relative path inside the package, so the default is used",
+            actual: detection.OverridesError
+        );
+    }
+
+    [Fact]
     public async Task AnInvalidManifestIsReportedAsync()
     {
         await NpmRepository.WriteAsync(

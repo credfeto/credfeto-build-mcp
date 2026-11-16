@@ -22,4 +22,8 @@ public sealed record JobDefinition(
 
     // The COVERAGE.md section a coverage report replaces
     public CoverageLanguage CoverageLanguage { get; init; } = CoverageLanguage.Dotnet;
+
+    // When set, the component a coverage file's figures are reported as, keyed by the file's path; a file it does
+    // not name keeps its own Cobertura package names
+    public IReadOnlyDictionary<string, string>? CoverageComponents { get; init; }
 }

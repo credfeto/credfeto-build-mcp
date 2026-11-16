@@ -867,6 +867,40 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         );
     }
 
+    [Fact]
+    public async Task ANamedCoverageFileIsReportedAsItsComponentAsync()
+    {
+        string web = await this._logs.WriteAsync(
+            relative: "packages/web/coverage/cobertura-coverage.xml",
+            content: CoberturaSamples.VITEST,
+            cancellationToken: this.CancellationToken()
+        );
+        string missing = Path.Combine(path1: this._logs.Path, path2: "packages/core/coverage/cobertura-coverage.xml");
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            definition: Definition(continueOnFailure: true, parser: null, "a") with
+            {
+                CoverageFiles = [web, missing],
+                HeadSha = "abc",
+                CoverageComponents = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [web] = "@example/web",
+                    [missing] = "@example/core",
+                },
+            }
+        );
+
+        Assert.NotNull(result.Coverage);
+        Assert.Equal(expected: new("@example/web", 4, 5, 80d), actual: Assert.Single(result.Coverage.Assemblies));
+        Assert.Equal(
+            expected: ["No coverage file was produced: @example/core (cobertura-coverage.xml)"],
+            actual: result.CoverageErrors,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
     private async ValueTask<JobDefinition> ReportDefinitionAsync(string report)
     {
         string coverage = await this._logs.WriteAsync(
