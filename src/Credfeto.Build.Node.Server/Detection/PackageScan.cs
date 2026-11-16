@@ -40,6 +40,7 @@ internal sealed class PackageScan
         string directory = this.FullPath(relativeDirectory);
         PackageManifest? manifest = await this.ReadPackageAsync(
             relativeDirectory: relativeDirectory,
+            installRoot: relativeDirectory,
             cancellationToken: cancellationToken
         );
 
@@ -88,7 +89,11 @@ internal sealed class PackageScan
             {
                 string relative = Join(installRoot, directory);
                 this._watchedDirectories.Add(relative);
-                _ = await this.ReadPackageAsync(relativeDirectory: relative, cancellationToken: cancellationToken);
+                _ = await this.ReadPackageAsync(
+                    relativeDirectory: relative,
+                    installRoot: installRoot,
+                    cancellationToken: cancellationToken
+                );
             }
         }
     }
@@ -97,6 +102,7 @@ internal sealed class PackageScan
     // the package was already recorded through another route) or when it is unusable, which sets the problem
     private async ValueTask<PackageManifest?> ReadPackageAsync(
         string relativeDirectory,
+        string installRoot,
         CancellationToken cancellationToken
     )
     {
@@ -126,6 +132,12 @@ internal sealed class PackageScan
                 RelativeDirectory: relativeDirectory,
                 Scripts: manifest.Scripts
             )
+            {
+                InstallRoot = installRoot,
+                ScriptNames = manifest.ScriptNames,
+                Dependencies = manifest.Dependencies,
+                TestRunner = manifest.TestRunner,
+            }
         );
 
         return manifest;

@@ -27,21 +27,9 @@ public sealed class DetectToolTests : TestBase
     }
 
     [Fact]
-    public void AnNpmRepositoryOffersDetectOnly()
-    {
-        IReadOnlyList<McpServerTool> tools = Catalog(Detected());
-
-        Assert.Equal(
-            expected: [ToolNames.DETECT],
-            actual: tools.Select(static tool => tool.ProtocolTool.Name),
-            comparer: StringComparer.Ordinal
-        );
-    }
-
-    [Fact]
     public async Task DetectReportsTheInstallRootsAndPackagesAsync()
     {
-        BuildTool detect = Assert.IsType<DetectTool>(Assert.Single(Catalog(Detected())));
+        BuildTool detect = TestTools.Find(tools: Catalog(Detected()), name: ToolNames.DETECT);
 
         CallToolResult result = await detect.CallAsync(arguments: null, cancellationToken: this.CancellationToken());
 
@@ -57,6 +45,8 @@ public sealed class DetectToolTests : TestBase
         Assert.Equal(expected: "example", actual: package.GetProperty("name").GetString());
         Assert.Equal(expected: ".", actual: package.GetProperty("directory").GetString());
         Assert.Equal(expected: "test", actual: package.GetProperty("scripts")[0].GetString());
+        Assert.Equal(expected: ".", actual: package.GetProperty("installRoot").GetString());
+        Assert.Equal(expected: "vitest", actual: package.GetProperty("testRunner").GetString());
         Assert.Equal(expected: 30, actual: root.GetProperty("timeoutMinutes").GetInt32());
         Assert.False(
             condition: root.TryGetProperty(propertyName: "overridesError", value: out _),
@@ -67,7 +57,7 @@ public sealed class DetectToolTests : TestBase
     [Fact]
     public async Task DetectFailsOnceThePackagesHaveGoneAsync()
     {
-        DetectTool detect = new(new ToolContext(new FixedDetectionSource(NotDetected())));
+        DetectTool detect = new(TestTools.Context(NotDetected()));
 
         CallToolResult result = await detect.CallAsync(arguments: null, cancellationToken: this.CancellationToken());
 
@@ -81,10 +71,7 @@ public sealed class DetectToolTests : TestBase
 
     private static IReadOnlyList<McpServerTool> Catalog(NodeDetection detection)
     {
-        return NodeToolCatalog.Create(
-            detection: detection,
-            context: new ToolContext(new FixedDetectionSource(detection))
-        );
+        return NodeToolCatalog.Create(detection: detection, context: TestTools.Context(detection));
     }
 
     private static NodeDetection Detected()
@@ -92,7 +79,13 @@ public sealed class DetectToolTests : TestBase
         NodeRepository repository = new(
             RepositoryRoot: ROOT,
             InstallRoots: [new NodeInstallRoot(RelativeDirectory: ".", LockFile: "package-lock.json")],
-            Packages: [new NodePackage(Name: "example", RelativeDirectory: ".", Scripts: ["test"])],
+            Packages:
+            [
+                new NodePackage(Name: "example", RelativeDirectory: ".", Scripts: ["test"])
+                {
+                    TestRunner = NodeTestRunner.Vitest,
+                },
+            ],
             Timeout: TimeSpan.FromMinutes(30)
         );
 

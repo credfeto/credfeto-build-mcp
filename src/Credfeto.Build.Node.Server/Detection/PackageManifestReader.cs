@@ -13,7 +13,17 @@ public static class PackageManifestReader
     public const string FILE_NAME = "package.json";
 
     private const int MAX_MANIFEST_LENGTH = 1024 * 1024;
+    private const int MAX_SCRIPT_NAMES = 256;
+    private const int MAX_DEPENDENCIES = 2048;
     private const string PACKAGES_PROPERTY = "packages";
+    private const string SCRIPTS_PROPERTY = "scripts";
+
+    private static readonly (string Property, DependencySection Section)[] DependencySections =
+    [
+        ("dependencies", DependencySection.Dependencies),
+        ("devDependencies", DependencySection.DevDependencies),
+        ("optionalDependencies", DependencySection.OptionalDependencies),
+    ];
 
     // Reads the package.json in the directory; Problem says why it could not be used, with its repository-relative path
     public static async ValueTask<(PackageManifest? Manifest, string? Problem)> ReadAsync(
@@ -47,12 +57,76 @@ public static class PackageManifestReader
 
     private static PackageManifest Parse(JsonElement root)
     {
+        IReadOnlyList<NodeDependency> dependencies = Dependencies(root);
+
         return new(
             Name: StringProperty(element: root, name: "name"),
             Scripts: Scripts(root),
             Workspaces: Workspaces(root),
             PackageManager: StringProperty(element: root, name: "packageManager")
-        );
+        )
+        {
+            ScriptNames = ScriptNames(root),
+            Dependencies = dependencies,
+            TestRunner = TestRunnerInference.Infer(testCommand: TestCommand(root), dependencies: dependencies),
+        };
+    }
+
+    // The command the unit-scope test runs: test:noe2e when there is one, as the pre-commit hook chooses
+    private static string? TestCommand(JsonElement root)
+    {
+        if (!TryGetScripts(root: root, scripts: out JsonElement scripts))
+        {
+            return null;
+        }
+
+        return StringProperty(element: scripts, name: NodeScripts.TEST_NO_E2E)
+            ?? StringProperty(element: scripts, name: NodeScripts.TEST);
+    }
+
+    private static IReadOnlyList<string> ScriptNames(JsonElement root)
+    {
+        if (!TryGetScripts(root: root, scripts: out JsonElement scripts))
+        {
+            return [];
+        }
+
+        return
+        [
+            .. scripts
+                .EnumerateObject()
+                .Where(static script => script.Value.ValueKind == JsonValueKind.String)
+                .Select(static script => script.Name)
+                .Take(MAX_SCRIPT_NAMES),
+        ];
+    }
+
+    private static IReadOnlyList<NodeDependency> Dependencies(JsonElement root)
+    {
+        List<NodeDependency> dependencies = [];
+
+        foreach ((string property, DependencySection section) in DependencySections)
+        {
+            if (
+                root.TryGetProperty(propertyName: property, value: out JsonElement declared)
+                && declared.ValueKind == JsonValueKind.Object
+            )
+            {
+                dependencies.AddRange(
+                    declared
+                        .EnumerateObject()
+                        .Select(dependency => new NodeDependency(Name: dependency.Name, Section: section))
+                );
+            }
+        }
+
+        return [.. dependencies.Take(MAX_DEPENDENCIES)];
+    }
+
+    private static bool TryGetScripts(JsonElement root, out JsonElement scripts)
+    {
+        return root.TryGetProperty(propertyName: SCRIPTS_PROPERTY, value: out scripts)
+            && scripts.ValueKind == JsonValueKind.Object;
     }
 
     private static string? StringProperty(JsonElement element, string name)
@@ -67,10 +141,7 @@ public static class PackageManifestReader
 
     private static IReadOnlyList<string> Scripts(JsonElement root)
     {
-        if (
-            !root.TryGetProperty(propertyName: "scripts", value: out JsonElement scripts)
-            || scripts.ValueKind != JsonValueKind.Object
-        )
+        if (!TryGetScripts(root: root, scripts: out JsonElement scripts))
         {
             return [];
         }

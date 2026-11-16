@@ -281,8 +281,8 @@ Not in this first version:
 ## The Node server
 
 `Credfeto.Build.Node.Server` (command `credfeto-build-node`, registered as the `build-node` MCP server) is the second
-language server. It is built on `Credfeto.Build.Server`, like the .NET server. This first version detects npm
-repositories and offers `detect`. The restore, build, lint, test and coverage jobs come later.
+language server. It is built on `Credfeto.Build.Server`, like the .NET server. It detects npm repositories and
+restores, builds, lints and tests them, and adds or updates their dependencies, as jobs. Coverage comes later.
 
 ### Node detection
 
@@ -296,12 +296,18 @@ repositories and offers `detect`. The restore, build, lint, test and coverage jo
   - A root with only a `bun.lock`, `bun.lockb`, `pnpm-lock.yaml` or `yarn.lock`, or one whose `packageManager` names
     another manager, is reported as unsupported.
   - A root with no lock file is reported as such, because `npm ci` needs one.
-- **Packages:** each package's name (its directory when `package.json` has none) and which of the `build`, `lint`,
-  `test`, `test:noe2e` and `test:coverage` scripts it has are recorded.
+- **Packages:** each package's name (its directory when `package.json` has none), its install root, which of the
+  `build`, `lint`, `test`, `test:noe2e` and `test:coverage` scripts it has, and the dependencies it declares in
+  `dependencies`, `devDependencies` and `optionalDependencies` are recorded.
+- **Test runner:** Vitest, Jest or `node --test`, from the first word of the package's test script (after any
+  `VAR=value` assignments), otherwise from a `vitest` or `jest` dependency. It is used only to read the test output;
+  an unknown runner reports exit codes alone.
 - **Limits:** each `package.json` is read up to 1 MiB, and a file that is larger, or that is not a JSON object, is
   reported.
 - **Overrides:** the `node` section of `.ai/commands.json` applies `enabled`, `packages` (narrows the detected
-  packages by name, and reports any name that matches nothing) and `timeoutMinutes` (default 30, at most 240).
+  packages by name, and reports any name that matches nothing), `testScript` (the script `test` runs instead of its
+  own choice, for the packages that already have it; an override selects, it never adds) and `timeoutMinutes`
+  (default 30, at most 240).
 
 When nothing supported is found, the server **registers no tools**, and its instructions give the reason.
 
@@ -320,7 +326,30 @@ watched directory, or by the next `detect` call, which always detects afresh.
 
 | Tool | Parameters | What it does |
 | --- | --- | --- |
-| `detect` | none | Lists the install roots and their lock files, the packages with their directories and scripts, the timeout and any overrides error, as they are now. |
+| `detect` | none | Lists the install roots and their lock files, the packages with their directories, install roots, scripts and test runners, the timeout and any overrides error, as they are now. |
+| `restore` | none | `npm ci --ignore-scripts --no-audit --no-fund` in every install root. The only install path. |
+| `build` | `package` | `npm run build`; offered only when some package has a `build` script. |
+| `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
+| `test` | `scope` (`unit` default, `all`), `package` | `unit` runs `test:noe2e` where a package has it (as the pre-commit hook does), otherwise `test`; `all` runs `test`. `node.testScript` replaces the choice. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
+| `add_package` | `package_id`, `version` (optional), `dev`, `package` | `npm install <id>@<version>` into one package's `package.json` (`--save-dev` with `dev`), then lists the version installed. |
+| `update_package` | `package_id`, `version` (optional, `latest` when left out), `package` (`all` default) | `npm install <id>@<version>` in each chosen package whose `package.json` declares it, keeping its section, then lists the version installed. |
+| `job_status`, `job_result` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
+
+Every tool except `detect`, `job_status` and `job_result` starts a job and returns its id at once.
+
+- **`package`:** `all`, or one of the packages that has the script. A workspace package runs from its install root
+  with `--workspace=<directory>`. For `all`, an install root whose own package has the script runs it once at the
+  root, as the pre-commit hook does, otherwise each workspace package with the script runs.
+- **Installing first:** `build`, `lint` and `test` run `npm ci --ignore-scripts` first when
+  `node_modules/.package-lock.json` is missing or older than the lock file, so a test run does not reinstall every
+  time. A failed install stops the job.
+- **Environment:** every step gets `CI=true` (so a bare `vitest` does not go into watch mode), `NO_COLOR=1`,
+  `FORCE_COLOR=0`, and npm's update notifier, fund and audit messages turned off.
+- **npm:** it is resolved to an absolute path from `PATH` and started with an argument vector, never through a shell,
+  and `npx` is never used, so nothing is downloaded and run on the fly.
+- **Package tools:** `package_id` must be an npm registry name and `version` a version, range or dist-tag, both
+  matched against fixed patterns, so no URL, path, git or alias specification reaches npm. Every install passes
+  `--ignore-scripts`.
 
 ### Installing and running the Node server
 

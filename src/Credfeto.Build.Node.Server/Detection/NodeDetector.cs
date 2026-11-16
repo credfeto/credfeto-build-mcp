@@ -104,7 +104,10 @@ public static class NodeDetector
                     max: MAX_TIMEOUT_MINUTES
                 )
             )
-        );
+        )
+        {
+            TestScript = overrides?.TestScript,
+        };
 
         return new(
             RepositoryRoot: scan.RepositoryRoot,
