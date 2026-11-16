@@ -11,11 +11,8 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
-- `job_result` waits up to `wait_seconds` (0 to 600, default 240) for a running job to finish, so agents no longer poll `job_status` (#34)
 ### Fixed
 ### Changed
-- The language-neutral MCP server infrastructure (command line and self-test, stdio host, live tool list, repository watcher, job tools, argument and schema helpers, tool errors and the command runner) moved from the .NET server into a new shared `Credfeto.Build.Server` library, and the shared test helpers into `Credfeto.Build.Testing`, ready for a second language server; the .NET server's tools, schemas, output and start-up are unchanged (#32)
-- Tool descriptions, the server instructions and the job-already-running error now say to wait with `job_result` instead of polling `job_status`, and a waiting `job_result` sends a progress notification every 15 seconds (#34)
 ### Deprecated
 ### Removed
 ### Deployment Changes
@@ -23,6 +20,13 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
+## [0.0.6] - 2026-11-16
+### Added
+- `job_result` waits up to `wait_seconds` (0 to 600, default 240) for a running job to finish, so agents no longer poll `job_status` (#34)
+### Changed
+- The language-neutral MCP server infrastructure (command line and self-test, stdio host, live tool list, repository watcher, job tools, argument and schema helpers, tool errors and the command runner) moved from the .NET server into a new shared `Credfeto.Build.Server` library, and the shared test helpers into `Credfeto.Build.Testing`, ready for a second language server; the .NET server's tools, schemas, output and start-up are unchanged (#32)
+- Tool descriptions, the server instructions and the job-already-running error now say to wait with `job_result` instead of polling `job_status`, and a waiting `job_result` sends a progress notification every 15 seconds (#34)
 
 ## [0.0.5] - 2026-11-15
 ### Added
