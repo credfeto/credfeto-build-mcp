@@ -28,7 +28,7 @@ public sealed class TestTool : BuildTool
         : base(
             name: ToolNames.TEST,
             title: "Run tests",
-            description: "Starts a job that restores, builds and then runs the tests in Release with the settings pre-commit buildtest uses. scope all builds the solution, then runs one solution-wide dotnet test --solution <solution> --no-build that excludes the *.Integration.Tests and *.Benchmark.Tests namespaces, as buildtest does; scope project builds and runs only the test project named in project, which may be a unit, integration or benchmark test project, with no namespace filter. Returns the job id at once; poll job_status, then read job_result for pass/fail counts and failing test names",
+            description: "Starts a job that restores, builds and then runs the tests in Release with the settings pre-commit buildtest uses. scope all builds the solution, then runs one solution-wide dotnet test --solution <solution> --no-build that excludes the *.Integration.Tests and *.Benchmark.Tests namespaces, as buildtest does; scope project builds and runs only the test project named in project, which may be a unit, integration or benchmark test project, with no namespace filter. Returns the job id at once; call job_result to wait for its outcome, with pass/fail counts and failing test names",
             schema: [scope, project],
             readOnly: false
         )
@@ -40,6 +40,7 @@ public sealed class TestTool : BuildTool
 
     protected override async ValueTask<string> ExecuteAsync(
         ToolArguments arguments,
+        IToolProgress progress,
         CancellationToken cancellationToken
     )
     {

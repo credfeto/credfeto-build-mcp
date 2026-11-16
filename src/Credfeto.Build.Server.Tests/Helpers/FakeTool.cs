@@ -10,7 +10,11 @@ internal sealed class FakeTool : BuildTool
         : base(name: name, title: "Fake " + name, description: "A tool that does nothing", schema: [], readOnly: true)
     { }
 
-    protected override ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        IToolProgress progress,
+        CancellationToken cancellationToken
+    )
     {
         return ValueTask.FromResult("{}");
     }

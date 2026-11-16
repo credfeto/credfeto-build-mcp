@@ -170,6 +170,16 @@ public sealed class DotnetToolCatalogTests : TestBase
         Assert.Equal(expected: readOnly, actual: tool.ProtocolTool.Annotations?.ReadOnlyHint);
     }
 
+    [Fact]
+    public static void NoToolDescriptionTellsTheAgentToPoll()
+    {
+        // An agent that reads "poll" spends a turn on every look at a job, which waiting in job_result avoids
+        Assert.DoesNotContain(collection: Create(TestRepositories.CoreTests), filter: static tool =>
+            tool.ProtocolTool.Description?.Contains(value: "poll", comparisonType: StringComparison.OrdinalIgnoreCase)
+            ?? false
+        );
+    }
+
     private static IReadOnlyList<McpServerTool> Create(
         params Credfeto.Build.Dotnet.Server.Detection.DotnetProject[] unitTests
     )

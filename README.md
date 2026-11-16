@@ -99,12 +99,16 @@ The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerat
 | `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |
 | `changelog_lint` | none | Starts `dotnet tool restore`, then `dotnet changelog --changelog <repo>/CHANGELOG.md --lint`. |
 | `buildtest` | none | Starts the installed pre-commit `buildtest` script, with no arguments, from the repository root. |
-| `job_status` | `id` | Whether the job is still running, how long it has run and which step it is on. |
-| `job_result` | `id` | The outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. |
+| `job_status` | `id` | A single, instant look at whether the job is still running, how long it has run and which step it is on. |
+| `job_result` | `id`; `wait_seconds`: 0 to 600, default 240 | Waits up to `wait_seconds` for the job to finish, then returns the outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. `0` answers at once. |
 
 Every tool except `detect`, `package_versions`, `job_status` and `job_result` starts a **job** and returns its id at once, so no MCP
-call or Bash timeout applies to a long build. Poll `job_status` until `state` is no longer `running`, then read
-`job_result`. One job runs at a time; starting another while one is running is refused. A job is killed when it
+call or Bash timeout applies to a long build. Call `job_result`, which waits for the job to finish; if `state` is
+still `running` when the wait runs out, the figures are partial, so call it again. While it waits it sends
+`notifications/progress` (the steps completed out of the step count, and the step running) to a client that asked for
+them with a progress token, at least every 15 seconds, so the client's request timeout keeps being reset. Use
+`job_status` for a single look at progress, never in a loop. Cancelling a `job_result` call only stops the wait; the
+job keeps running. One job runs at a time; starting another while one is running is refused. A job is killed when it
 exceeds its timeout (30 minutes by default, `buildtest` included), and when the server shuts down.
 
 Each step runs as a fixed argument vector, never through a shell. Output is stripped of ANSI codes and masked before

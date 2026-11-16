@@ -23,7 +23,7 @@ public sealed class BuildCheckTool : BuildTool
         : base(
             name: ToolNames.BUILDCHECK,
             title: "Check project settings",
-            description: "Starts a job that runs dotnet tool restore, then the repository's dotnet buildcheck on the solution with warnings as errors, for a pre-release or a release build. Needs a .NET tool manifest in the repository. Returns the job id at once; poll job_status, then read job_result",
+            description: "Starts a job that runs dotnet tool restore, then the repository's dotnet buildcheck on the solution with warnings as errors, for a pre-release or a release build. Needs a .NET tool manifest in the repository. Returns the job id at once; call job_result to wait for its outcome",
             schema: [mode],
             readOnly: false
         )
@@ -34,6 +34,7 @@ public sealed class BuildCheckTool : BuildTool
 
     protected override async ValueTask<string> ExecuteAsync(
         ToolArguments arguments,
+        IToolProgress progress,
         CancellationToken cancellationToken
     )
     {

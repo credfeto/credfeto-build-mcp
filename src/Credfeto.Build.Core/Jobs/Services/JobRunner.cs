@@ -88,14 +88,66 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         return this.Find(id)?.Result(this._settings.MaxFailedTests);
     }
 
-    public async ValueTask WaitForCompletionAsync(string id, CancellationToken cancellationToken)
+    public async ValueTask<bool> WaitForCompletionAsync(
+        string id,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken
+    )
     {
         RunningJob? job = this.Find(id);
 
-        if (job is not null)
+        if (job is null)
         {
-            await job.WaitAsync(cancellationToken);
+            return false;
         }
+
+        await this.WaitBoundedAsync(signal: job.Completion, maxWait: maxWait, cancellationToken: cancellationToken);
+
+        return job.Completion.IsCompleted;
+    }
+
+    public async ValueTask<bool> WaitForChangeAsync(
+        string id,
+        int stepsCompleted,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken
+    )
+    {
+        RunningJob? job = this.Find(id);
+
+        if (job is null)
+        {
+            return false;
+        }
+
+        await this.WaitBoundedAsync(
+            signal: job.WaitForChangeAsync(stepsCompleted),
+            maxWait: maxWait,
+            cancellationToken: cancellationToken
+        );
+
+        return !job.IsRunning || this._shutdown.IsCancellationRequested;
+    }
+
+    private async ValueTask WaitBoundedAsync(Task signal, TimeSpan maxWait, CancellationToken cancellationToken)
+    {
+        if (this._shutdown.IsCancellationRequested)
+        {
+            // Nothing more will happen worth waiting for, and the shutdown token may already be disposed
+            return;
+        }
+
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
+            token1: cancellationToken,
+            token2: this._shutdown.Token
+        );
+
+        // Running out of time or the server shutting down just ends the wait; only the caller giving up is an error.
+        // Abandoning the wait never touches the job itself
+        await signal
+            .WaitAsync(timeout: maxWait, timeProvider: this._timeProvider, cancellationToken: linked.Token)
+            .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private RunningJob? Find(string id)

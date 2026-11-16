@@ -51,18 +51,43 @@ public abstract class BuildTool : McpServerTool
         CancellationToken cancellationToken = default
     )
     {
-        return this.CallAsync(arguments: request.Params?.Arguments, cancellationToken: cancellationToken);
+        IToolProgress progress = request.Params.ProgressToken is { } progressToken
+            ? new McpToolProgress(server: request.Server, progressToken: progressToken)
+            : NoToolProgress.Instance;
+
+        return this.CallAsync(
+            arguments: request.Params.Arguments,
+            progress: progress,
+            cancellationToken: cancellationToken
+        );
+    }
+
+    public ValueTask<CallToolResult> CallAsync(
+        IEnumerable<KeyValuePair<string, JsonElement>>? arguments,
+        CancellationToken cancellationToken
+    )
+    {
+        return this.CallAsync(
+            arguments: arguments,
+            progress: NoToolProgress.Instance,
+            cancellationToken: cancellationToken
+        );
     }
 
     public async ValueTask<CallToolResult> CallAsync(
         IEnumerable<KeyValuePair<string, JsonElement>>? arguments,
+        IToolProgress progress,
         CancellationToken cancellationToken
     )
     {
         try
         {
             ToolArguments parsed = new(arguments: arguments, schema: this.Schema);
-            string json = await this.ExecuteAsync(arguments: parsed, cancellationToken: cancellationToken);
+            string json = await this.ExecuteAsync(
+                arguments: parsed,
+                progress: progress,
+                cancellationToken: cancellationToken
+            );
 
             return Result(text: json, isError: false);
         }
@@ -79,7 +104,11 @@ public abstract class BuildTool : McpServerTool
         }
     }
 
-    protected abstract ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken);
+    protected abstract ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        IToolProgress progress,
+        CancellationToken cancellationToken
+    );
 
     private static CallToolResult Result(string text, bool isError)
     {

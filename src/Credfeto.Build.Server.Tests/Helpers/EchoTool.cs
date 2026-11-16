@@ -23,7 +23,11 @@ internal sealed class EchoTool : BuildTool
         this._execute = execute;
     }
 
-    protected override ValueTask<string> ExecuteAsync(ToolArguments arguments, CancellationToken cancellationToken)
+    protected override ValueTask<string> ExecuteAsync(
+        ToolArguments arguments,
+        IToolProgress progress,
+        CancellationToken cancellationToken
+    )
     {
         return ValueTask.FromResult(this._execute(arguments));
     }
