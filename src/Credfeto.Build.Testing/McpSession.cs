@@ -13,8 +13,11 @@ namespace Credfeto.Build.Testing;
 public sealed class McpSession
 {
     public const string TOOLS_LIST_CHANGED = "notifications/tools/list_changed";
+    public const string PROGRESS = "notifications/progress";
 
     private readonly StreamReader _fromServer;
+    private readonly List<string> _progress = [];
+    private readonly Dictionary<int, string> _responses = [];
     private readonly Stream _toServer;
     private int _nextId = 10;
     private int _unseenListChanges;
@@ -68,46 +71,111 @@ public sealed class McpSession
     {
         while (this._unseenListChanges == 0)
         {
-            using JsonDocument message = await this.ReceiveAsync(cancellationToken);
+            await this.ReceiveNextAsync(cancellationToken);
         }
 
         this._unseenListChanges--;
+    }
+
+    // The params of every notifications/progress received so far, as raw JSON
+    public IReadOnlyList<string> ProgressReceived => this._progress;
+
+    // Sends a tools/call without waiting for its answer, so other requests can go out while it is open
+    public async ValueTask<int> CallToolAsync(
+        string name,
+        string argumentsJson,
+        string? progressToken,
+        CancellationToken cancellationToken
+    )
+    {
+        int id = ++this._nextId;
+        string meta = progressToken is null
+            ? string.Empty
+            : ""","_meta":{"progressToken":"""
+                + JsonSerializer.Serialize(value: progressToken, jsonTypeInfo: TestJsonContext.Default.String)
+                + "}";
+        await McpProbe.SendAsync(
+            toServer: this._toServer,
+            message: """{"jsonrpc":"2.0","id":"""
+                + id.ToString(CultureInfo.InvariantCulture)
+                + ""","method":"tools/call","params":{"name":"""
+                + JsonSerializer.Serialize(value: name, jsonTypeInfo: TestJsonContext.Default.String)
+                + ""","arguments":"""
+                + argumentsJson
+                + meta
+                + "}}",
+            cancellationToken: cancellationToken
+        );
+
+        return id;
+    }
+
+    // The text of a tools/call answer
+    public async ValueTask<string> ReceiveToolTextAsync(int id, CancellationToken cancellationToken)
+    {
+        using JsonDocument answer = await this.ReceiveResponseAsync(id: id, cancellationToken: cancellationToken);
+
+        return answer.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()
+            ?? string.Empty;
+    }
+
+    // True when the answer to the request has arrived and not yet been taken
+    public bool HasResponse(int id)
+    {
+        return this._responses.ContainsKey(id);
+    }
+
+    public async ValueTask WaitForProgressAsync(int count, CancellationToken cancellationToken)
+    {
+        while (this._progress.Count < count)
+        {
+            await this.ReceiveNextAsync(cancellationToken);
+        }
     }
 
     private async ValueTask<JsonDocument> ReceiveResponseAsync(int id, CancellationToken cancellationToken)
     {
         while (true)
         {
-            JsonDocument document = await this.ReceiveAsync(cancellationToken);
-
-            if (
-                document.RootElement.TryGetProperty(propertyName: "id", value: out JsonElement responseId)
-                && responseId.ValueKind == JsonValueKind.Number
-                && responseId.GetInt32() == id
-            )
+            if (this._responses.Remove(key: id, value: out string? response))
             {
-                return document;
+                return JsonDocument.Parse(response);
             }
 
-            document.Dispose();
+            await this.ReceiveNextAsync(cancellationToken);
         }
     }
 
-    // Reads one message, counting every tools/list_changed notification on the way past
-    private async ValueTask<JsonDocument> ReceiveAsync(CancellationToken cancellationToken)
+    // Reads one message: answers are kept until asked for, notifications are counted or kept on the way past
+    private async ValueTask ReceiveNextAsync(CancellationToken cancellationToken)
     {
         string line = await this._fromServer.ReadLineAsync(cancellationToken)
             ?? throw new EndOfStreamException("The server closed its output");
-        JsonDocument document = JsonDocument.Parse(line);
+        using JsonDocument document = JsonDocument.Parse(line);
+        JsonElement root = document.RootElement;
 
-        if (
-            document.RootElement.TryGetProperty(propertyName: "method", value: out JsonElement method)
-            && StringComparer.Ordinal.Equals(x: method.GetString(), y: TOOLS_LIST_CHANGED)
-        )
+        if (root.TryGetProperty(propertyName: "method", value: out JsonElement method))
         {
-            this._unseenListChanges++;
+            string? name = method.GetString();
+
+            if (StringComparer.Ordinal.Equals(x: name, y: TOOLS_LIST_CHANGED))
+            {
+                this._unseenListChanges++;
+            }
+            else if (StringComparer.Ordinal.Equals(x: name, y: PROGRESS))
+            {
+                this._progress.Add(root.GetProperty("params").GetRawText());
+            }
+
+            return;
         }
 
-        return document;
+        if (
+            root.TryGetProperty(propertyName: "id", value: out JsonElement responseId)
+            && responseId.ValueKind == JsonValueKind.Number
+        )
+        {
+            this._responses[responseId.GetInt32()] = line;
+        }
     }
 }

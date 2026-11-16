@@ -19,7 +19,7 @@ public sealed class JobStatusTool : BuildTool
         : base(
             name: JobToolNames.JOB_STATUS,
             title: "Job status",
-            description: "Reports whether a job is still running, how long it has run and which step it is on",
+            description: "A single, instant look at a job: whether it is still running, how long it has run and which step it is on. To wait for a job to finish, call job_result, which waits",
             schema: [id],
             readOnly: true
         )

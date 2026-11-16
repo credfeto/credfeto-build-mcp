@@ -14,7 +14,7 @@ public sealed class RestoreTool : BuildTool
         : base(
             name: ToolNames.RESTORE,
             title: "Restore packages",
-            description: "Starts a job that runs dotnet restore on the solution. Returns the job id at once; poll job_status, then read job_result",
+            description: "Starts a job that runs dotnet restore on the solution. Returns the job id at once; call job_result to wait for its outcome",
             schema: [],
             readOnly: false
         )

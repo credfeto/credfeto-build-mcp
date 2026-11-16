@@ -22,6 +22,7 @@ public sealed class JobRunnerTests : TestBase, IDisposable
     private const UnixFileMode OWNER_ONLY = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 
     private static readonly TimeSpan JobTimeout = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(10);
 
     private readonly ScriptedProcessLauncher _launcher = new();
     private readonly TemporaryDirectory _logs = new();
@@ -218,7 +219,11 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         AssertLogOpen(started.LogPath);
 
         this._time.Advance(JobTimeout + TimeSpan.FromSeconds(1));
-        await runner.WaitForCompletionAsync(id: started.Id, cancellationToken: this.CancellationToken());
+        _ = await runner.WaitForCompletionAsync(
+            id: started.Id,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
 
         JobResult? result = runner.FindResult(started.Id);
         Assert.NotNull(result);
@@ -605,6 +610,165 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         }
     }
 
+    [Fact]
+    public async Task ABoundedWaitReturnsAsSoonAsTheJobFinishesAsync()
+    {
+        GatedProcessLauncher gated = new();
+        await using JobRunner runner = this.CreateRunner(launcher: gated);
+        JobStatus started = await this.StartGatedAsync(runner: runner, gated: gated, "a");
+
+        Task<bool> waiting = runner
+            .WaitForCompletionAsync(id: started.Id, maxWait: WaitLimit, cancellationToken: this.CancellationToken())
+            .AsTask();
+        Assert.False(condition: waiting.IsCompleted, userMessage: "the wait stays open while the job runs");
+
+        gated.Release("a");
+
+        Assert.True(condition: await waiting, userMessage: "the wait ends with the job, long before its limit");
+        Assert.Equal(expected: JobState.Succeeded, actual: runner.FindStatus(started.Id)?.State);
+    }
+
+    [Fact]
+    public async Task ABoundedWaitThatRunsOutLeavesTheJobRunningAsync()
+    {
+        GatedProcessLauncher gated = new();
+        await using JobRunner runner = this.CreateRunner(launcher: gated);
+        JobStatus started = await this.StartGatedAsync(runner: runner, gated: gated, "a");
+
+        Task<bool> waiting = runner
+            .WaitForCompletionAsync(id: started.Id, maxWait: WaitLimit, cancellationToken: this.CancellationToken())
+            .AsTask();
+        this._time.Advance(WaitLimit);
+
+        Assert.False(condition: await waiting, userMessage: "the wait ran out");
+        Assert.Equal(expected: JobState.Running, actual: runner.FindStatus(started.Id)?.State);
+
+        gated.Release("a");
+        Assert.Equal(expected: JobState.Succeeded, actual: (await this.FinishAsync(runner, started.Id)).State);
+    }
+
+    [Fact]
+    public async Task ABoundedWaitForAnUnknownJobEndsAtOnceAsync()
+    {
+        await using JobRunner runner = this.CreateRunner();
+
+        bool finished = await runner.WaitForCompletionAsync(
+            id: "0123456789abcdef0123456789abcdef",
+            maxWait: WaitLimit,
+            cancellationToken: this.CancellationToken()
+        );
+
+        Assert.False(condition: finished, userMessage: "no such job");
+    }
+
+    [Fact]
+    public async Task CancellingAWaitLeavesTheJobRunningAsync()
+    {
+        GatedProcessLauncher gated = new();
+        await using JobRunner runner = this.CreateRunner(launcher: gated);
+        JobStatus started = await this.StartGatedAsync(runner: runner, gated: gated, "a");
+        using CancellationTokenSource cancellation = new();
+
+        Task<bool> waiting = runner
+            .WaitForCompletionAsync(id: started.Id, maxWait: WaitLimit, cancellationToken: cancellation.Token)
+            .AsTask();
+        await cancellation.CancelAsync();
+
+        bool cancelled = false;
+
+        try
+        {
+            _ = await waiting;
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+
+        Assert.True(condition: cancelled, userMessage: "the cancelled wait throws");
+        Assert.Equal(expected: JobState.Running, actual: runner.FindStatus(started.Id)?.State);
+
+        gated.Release("a");
+        Assert.Equal(expected: JobState.Succeeded, actual: (await this.FinishAsync(runner, started.Id)).State);
+    }
+
+    [Fact]
+    public async Task ShutdownEndsAnOpenWaitAsync()
+    {
+        GatedProcessLauncher gated = new();
+        JobRunner runner = this.CreateRunner(launcher: gated);
+        JobStatus started = await this.StartGatedAsync(runner: runner, gated: gated, "a");
+
+        Task<bool> waiting = runner
+            .WaitForCompletionAsync(id: started.Id, maxWait: WaitLimit, cancellationToken: this.CancellationToken())
+            .AsTask();
+        await runner.DisposeAsync();
+
+        _ = await waiting;
+        Assert.Equal(expected: JobState.Cancelled, actual: runner.FindStatus(started.Id)?.State);
+    }
+
+    [Fact]
+    public async Task AStepChangeWakesAWatcherAsync()
+    {
+        GatedProcessLauncher gated = new();
+        await using JobRunner runner = this.CreateRunner(launcher: gated);
+        JobStatus started = await this.StartGatedAsync(runner: runner, gated: gated, "a", "b");
+        JobWatch first = Assert.IsType<JobWatch>(runner.Watch(started.Id));
+        Assert.Equal(expected: "a", actual: first.Status.CurrentStep);
+
+        Task<JobWaitOutcome> changing = this.WaitForChangeAsync(runner: runner, watch: first);
+        Assert.False(condition: changing.IsCompleted, userMessage: "nothing has changed yet");
+        gated.Release("a");
+
+        Assert.Equal(expected: JobWaitOutcome.Signalled, actual: await changing);
+        await gated.WaitForStartAsync(step: "b", cancellationToken: this.CancellationToken());
+        JobWatch second = Assert.IsType<JobWatch>(runner.Watch(started.Id));
+        Assert.Equal(expected: "b", actual: second.Status.CurrentStep);
+        Assert.Equal(expected: 1, actual: second.Status.StepsCompleted);
+
+        Task<JobWaitOutcome> idle = this.WaitForChangeAsync(runner: runner, watch: second);
+        this._time.Advance(WaitLimit);
+        Assert.Equal(expected: JobWaitOutcome.TimedOut, actual: await idle);
+
+        gated.Release("b");
+        _ = await this.FinishAsync(runner, started.Id);
+        Assert.Equal(
+            expected: JobWaitOutcome.Signalled,
+            actual: await this.WaitForChangeAsync(runner: runner, watch: second)
+        );
+    }
+
+    private Task<JobWaitOutcome> WaitForChangeAsync(JobRunner runner, JobWatch watch)
+    {
+        return runner
+            .WaitForChangeAsync(watch: watch, maxWait: WaitLimit, cancellationToken: this.CancellationToken())
+            .AsTask();
+    }
+
+    private async ValueTask<JobStatus> StartGatedAsync(
+        JobRunner runner,
+        GatedProcessLauncher gated,
+        params string[] steps
+    )
+    {
+        JobStatus started = await runner.StartAsync(GatedProcessLauncher.Job(JobTimeout, steps));
+        await gated.WaitForStartAsync(step: steps[0], cancellationToken: this.CancellationToken());
+
+        return started;
+    }
+
+    private async ValueTask<JobResult> FinishAsync(JobRunner runner, string id)
+    {
+        _ = await runner.WaitForCompletionAsync(
+            id: id,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+
+        return runner.FindResult(id) ?? throw new InvalidOperationException("The job vanished");
+    }
+
     private static async ValueTask AssertLogClosedAsync(string logPath)
     {
         // While the server holds the log open it keeps a shared lock on it, so only a closed log opens exclusively
@@ -631,10 +795,10 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         );
     }
 
-    private JobRunner CreateRunner(JobRunnerSettings? settings = null)
+    private JobRunner CreateRunner(JobRunnerSettings? settings = null, IProcessLauncher? launcher = null)
     {
         return new(
-            launcher: this._launcher,
+            launcher: launcher ?? this._launcher,
             masker: new OutputMasker(new Dictionary<string, string>(StringComparer.Ordinal)),
             settings: settings ?? JobRunnerSettings.Create(this._logs.Path),
             timeProvider: this._time
@@ -644,7 +808,12 @@ public sealed class JobRunnerTests : TestBase, IDisposable
     private async ValueTask<JobResult> RunAsync(JobRunner runner, JobDefinition definition)
     {
         JobStatus status = await runner.StartAsync(definition);
-        await runner.WaitForCompletionAsync(id: status.Id, cancellationToken: this.CancellationToken());
+        bool finished = await runner.WaitForCompletionAsync(
+            id: status.Id,
+            maxWait: Timeout.InfiniteTimeSpan,
+            cancellationToken: this.CancellationToken()
+        );
+        Assert.True(condition: finished, userMessage: "an unbounded wait ends when the job does");
 
         return runner.FindResult(status.Id) ?? throw new InvalidOperationException("The job vanished");
     }

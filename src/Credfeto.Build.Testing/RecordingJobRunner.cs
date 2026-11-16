@@ -57,8 +57,22 @@ public sealed class RecordingJobRunner : IJobRunner
         return null;
     }
 
-    public ValueTask WaitForCompletionAsync(string id, CancellationToken cancellationToken)
+    public JobWatch? Watch(string id)
     {
-        return ValueTask.CompletedTask;
+        return this.FindStatus(id) is { } status ? new(Status: status, Changed: Task.CompletedTask) : null;
+    }
+
+    public ValueTask<bool> WaitForCompletionAsync(string id, TimeSpan maxWait, CancellationToken cancellationToken)
+    {
+        return ValueTask.FromResult(this._statuses.ContainsKey(id));
+    }
+
+    public ValueTask<JobWaitOutcome> WaitForChangeAsync(
+        JobWatch watch,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken
+    )
+    {
+        return ValueTask.FromResult(JobWaitOutcome.Signalled);
     }
 }

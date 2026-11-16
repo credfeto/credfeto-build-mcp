@@ -170,6 +170,29 @@ public sealed class DotnetToolCatalogTests : TestBase
         Assert.Equal(expected: readOnly, actual: tool.ProtocolTool.Annotations?.ReadOnlyHint);
     }
 
+    [Fact]
+    public static void NoToolTellsTheCallerToPollAndEveryJobPointsAtJobResult()
+    {
+        foreach (McpServerTool tool in Create(TestRepositories.CoreTests, TestRepositories.ApiTests))
+        {
+            string description = tool.ProtocolTool.Description ?? string.Empty;
+            Assert.DoesNotContain(
+                expectedSubstring: "poll",
+                actualString: description,
+                comparisonType: StringComparison.OrdinalIgnoreCase
+            );
+
+            if (description.StartsWith(value: "Starts a job", comparisonType: StringComparison.Ordinal))
+            {
+                Assert.Contains(
+                    expectedSubstring: "call job_result to wait for its outcome",
+                    actualString: description,
+                    comparisonType: StringComparison.Ordinal
+                );
+            }
+        }
+    }
+
     private static IReadOnlyList<McpServerTool> Create(
         params Credfeto.Build.Dotnet.Server.Detection.DotnetProject[] unitTests
     )

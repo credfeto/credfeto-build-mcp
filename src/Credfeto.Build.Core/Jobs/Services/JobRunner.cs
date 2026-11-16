@@ -21,7 +21,10 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
     private readonly Lock _lock = new();
     private readonly IOutputMasker _masker;
     private readonly JobRunnerSettings _settings;
-    private readonly CancellationTokenSource _shutdown = new();
+    private readonly CancellationTokenSource _shutdown;
+
+    // Kept apart from its source, which is disposed at shutdown, so a wait that starts after shutdown ends at once
+    private readonly CancellationToken _shuttingDown;
     private readonly TimeProvider _timeProvider;
     private long _sequence;
 
@@ -36,6 +39,8 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         this._masker = masker;
         this._settings = settings;
         this._timeProvider = timeProvider;
+        this._shutdown = new();
+        this._shuttingDown = this._shutdown.Token;
     }
 
     public async ValueTask DisposeAsync()
@@ -88,13 +93,69 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
         return this.Find(id)?.Result(this._settings.MaxFailedTests);
     }
 
-    public async ValueTask WaitForCompletionAsync(string id, CancellationToken cancellationToken)
+    public JobWatch? Watch(string id)
     {
-        RunningJob? job = this.Find(id);
+        return this.Find(id)?.Watch();
+    }
 
-        if (job is not null)
+    public ValueTask<bool> WaitForCompletionAsync(string id, TimeSpan maxWait, CancellationToken cancellationToken)
+    {
+        return this.Find(id) is { } job
+            ? this.FinishedWithinAsync(job: job, maxWait: maxWait, cancellationToken: cancellationToken)
+            : ValueTask.FromResult(false);
+    }
+
+    public ValueTask<JobWaitOutcome> WaitForChangeAsync(
+        JobWatch watch,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken
+    )
+    {
+        return this.WaitForAsync(signal: watch.Changed, maxWait: maxWait, cancellationToken: cancellationToken);
+    }
+
+    private async ValueTask<bool> FinishedWithinAsync(
+        RunningJob job,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken
+    )
+    {
+        JobWaitOutcome outcome = await this.WaitForAsync(
+            signal: job.Completion,
+            maxWait: maxWait,
+            cancellationToken: cancellationToken
+        );
+
+        return outcome == JobWaitOutcome.Signalled;
+    }
+
+    // Only the caller's cancellation throws, and neither it nor the wait running out reaches the job
+    private async ValueTask<JobWaitOutcome> WaitForAsync(
+        Task signal,
+        TimeSpan maxWait,
+        CancellationToken cancellationToken
+    )
+    {
+        using CancellationTokenSource stop = CancellationTokenSource.CreateLinkedTokenSource(
+            token1: this._shuttingDown,
+            token2: cancellationToken
+        );
+
+        try
         {
-            await job.WaitAsync(cancellationToken);
+            // WhenAny never faults: the job records its own end state, so a job that failed reads as finished
+            _ = await Task.WhenAny(signal)
+                .WaitAsync(timeout: maxWait, timeProvider: this._timeProvider, cancellationToken: stop.Token);
+
+            return JobWaitOutcome.Signalled;
+        }
+        catch (TimeoutException)
+        {
+            return JobWaitOutcome.TimedOut;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return JobWaitOutcome.ShuttingDown;
         }
     }
 

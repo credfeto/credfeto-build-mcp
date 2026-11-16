@@ -38,6 +38,17 @@ internal static class Arguments
         };
     }
 
+    // The job id plus a wait_seconds given as raw JSON, so a test can send a value of the wrong type
+    public static Dictionary<string, JsonElement> JobWait(string id, string waitJson)
+    {
+        Dictionary<string, JsonElement> arguments = Text(name: "id", value: id);
+
+        using JsonDocument wait = JsonDocument.Parse(waitJson);
+        arguments["wait_seconds"] = wait.RootElement.Clone();
+
+        return arguments;
+    }
+
     public static string Answer(CallToolResult result)
     {
         return Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text;
