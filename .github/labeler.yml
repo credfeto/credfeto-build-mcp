@@ -20,6 +20,10 @@
   - any: ['src/Credfeto.Build.Dotnet.Server/**/*']
 "credfeto-build-dotnet-server-tests":
   - any: ['src/Credfeto.Build.Dotnet.Server.Tests/**/*']
+"credfeto-build-node-server":
+  - any: ['src/Credfeto.Build.Node.Server/**/*']
+"credfeto-build-node-server-tests":
+  - any: ['src/Credfeto.Build.Node.Server.Tests/**/*']
 "credfeto-build-server":
   - any: ['src/Credfeto.Build.Server/**/*']
 "credfeto-build-server-tests":

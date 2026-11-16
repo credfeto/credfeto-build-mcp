@@ -11,6 +11,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
+- The Node server (`credfeto-build-node`, MCP server `build-node`), a Native AOT dotnet tool: npm-only detection of the root and `src/` install roots and their workspaces, a `detect` tool, a non-recursive repository watch that never enters `node_modules`, `--self-test`, and the pointer and `linux-x64` tool packages (#39)
 ### Fixed
 ### Changed
 ### Deprecated

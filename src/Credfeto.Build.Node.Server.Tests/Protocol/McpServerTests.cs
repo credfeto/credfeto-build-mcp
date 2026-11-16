@@ -1,0 +1,221 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Pipelines;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Credfeto.Build.Core.Configuration;
+using Credfeto.Build.Node.Server.Detection;
+using Credfeto.Build.Node.Server.Tests.Helpers;
+using Credfeto.Build.Server;
+using Credfeto.Build.Testing;
+using FunFair.Test.Common;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol.Server;
+using Xunit;
+
+namespace Credfeto.Build.Node.Server.Tests.Protocol;
+
+public sealed class McpServerTests : TestBase
+{
+    private static readonly string[] AllTools = ["detect"];
+
+    [Fact]
+    public async Task NpmRepositoryAdvertisesItsToolsAsync()
+    {
+        using TemporaryDirectory repository = new();
+        await NpmRepository.WriteAsync(repository: repository, cancellationToken: this.CancellationToken());
+
+        McpProbeResult result = await this.ProbeAsync(repository);
+
+        Assert.Equal(expected: AllTools, actual: result.ToolNames, comparer: StringComparer.Ordinal);
+        Assert.True(condition: result.AdvertisesTools, userMessage: "the tools capability is advertised");
+        Assert.True(condition: result.AdvertisesListChanged, userMessage: "tools.listChanged is advertised");
+        Assert.Contains(
+            expectedSubstring: "npm packages in",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task RepositoryWithoutPackageJsonAdvertisesNoToolsAsync()
+    {
+        using TemporaryDirectory repository = new();
+        _ = await repository.WriteAsync(
+            relative: "src/Example.slnx",
+            content: "<Solution />",
+            cancellationToken: this.CancellationToken()
+        );
+
+        McpProbeResult result = await this.ProbeAsync(repository);
+
+        Assert.Empty(result.ToolNames);
+        Assert.Contains(
+            expectedSubstring: "offers no tools",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
+        Assert.Contains(
+            expectedSubstring: "No package.json at the repository root or in src/",
+            actualString: result.Instructions,
+            comparisonType: StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task TheToolListFollowsTheRepositoryWithListChangedAsync()
+    {
+        CancellationToken cancellationToken = this.CancellationToken();
+        using TemporaryDirectory repository = new();
+        BuildServerEnvironment environment = Environment(repository);
+        NodeDetection detection = await NodeDetector.DetectAsync(
+            repositoryRoot: repository.Path,
+            cancellationToken: cancellationToken
+        );
+
+        await using ServiceProvider services = new ServiceCollection()
+            .AddNodeServer(environment: environment, detection: detection, debounce: TimeSpan.FromMilliseconds(100))
+            .BuildServiceProvider();
+
+        Pipe clientToServer = new();
+        Pipe serverToClient = new();
+
+        await using StreamServerTransport transport = new(
+            clientToServer.Reader.AsStream(),
+            serverToClient.Writer.AsStream(),
+            "test",
+            NullLoggerFactory.Instance
+        );
+
+        string lockFile = repository.Combine(NpmRepository.NPM_LOCK_FILE);
+        Task client = WatchingClientAsync(
+            addNpm: token => NpmRepository.WriteAsync(repository: repository, cancellationToken: token),
+            lockFile: lockFile,
+            clientToServer: clientToServer,
+            serverToClient: serverToClient,
+            cancellationToken: cancellationToken
+        );
+
+        await ServerRunner.RunAsync(services: services, transport: transport, cancellationToken: cancellationToken);
+        await client;
+    }
+
+    private static async Task WatchingClientAsync(
+        Func<CancellationToken, ValueTask> addNpm,
+        string lockFile,
+        Pipe clientToServer,
+        Pipe serverToClient,
+        CancellationToken cancellationToken
+    )
+    {
+        await using Stream toServer = clientToServer.Writer.AsStream();
+        using StreamReader fromServer = new(serverToClient.Reader.AsStream());
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+
+        try
+        {
+            McpSession session = new(toServer: toServer, fromServer: fromServer);
+            await session.InitializeAsync(timeout.Token);
+            Assert.Empty(await session.ListToolsAsync(timeout.Token));
+
+            await addNpm(timeout.Token);
+            await WaitForToolsAsync(session: session, expected: AllTools, cancellationToken: timeout.Token);
+
+            File.Delete(lockFile);
+            await WaitForToolsAsync(session: session, expected: [], cancellationToken: timeout.Token);
+        }
+        finally
+        {
+            await clientToServer.Writer.CompleteAsync();
+        }
+    }
+
+    private static async ValueTask WaitForToolsAsync(
+        McpSession session,
+        IReadOnlyList<string> expected,
+        CancellationToken cancellationToken
+    )
+    {
+        // The change may land in more than one refresh; each one is announced, so wait until the list matches
+        while (true)
+        {
+            await session.WaitForListChangedAsync(cancellationToken);
+            IReadOnlyList<string> tools = await session.ListToolsAsync(cancellationToken);
+
+            if (tools.SequenceEqual(second: expected, comparer: StringComparer.Ordinal))
+            {
+                return;
+            }
+        }
+    }
+
+    private async ValueTask<McpProbeResult> ProbeAsync(TemporaryDirectory repository)
+    {
+        CancellationToken cancellationToken = this.CancellationToken();
+        NodeDetection detection = await NodeDetector.DetectAsync(
+            repositoryRoot: repository.Path,
+            cancellationToken: cancellationToken
+        );
+
+        await using ServiceProvider services = new ServiceCollection()
+            .AddNodeServer(environment: Environment(repository), detection: detection)
+            .BuildServiceProvider();
+
+        Pipe clientToServer = new();
+        Pipe serverToClient = new();
+
+        await using StreamServerTransport transport = new(
+            clientToServer.Reader.AsStream(),
+            serverToClient.Writer.AsStream(),
+            "test",
+            NullLoggerFactory.Instance
+        );
+
+        Task<McpProbeResult> client = ClientAsync(
+            clientToServer: clientToServer,
+            serverToClient: serverToClient,
+            cancellationToken: cancellationToken
+        );
+
+        await ServerRunner.RunAsync(services: services, transport: transport, cancellationToken: cancellationToken);
+
+        return await client;
+    }
+
+    private static BuildServerEnvironment Environment(TemporaryDirectory repository)
+    {
+        return new(
+            RepositoryRoot: repository.Path,
+            RepositoryRootSource: RepositoryRootSource.Variable,
+            LogDirectory: repository.Combine("logs")
+        );
+    }
+
+    private static async Task<McpProbeResult> ClientAsync(
+        Pipe clientToServer,
+        Pipe serverToClient,
+        CancellationToken cancellationToken
+    )
+    {
+        await using Stream toServer = clientToServer.Writer.AsStream();
+        using StreamReader fromServer = new(serverToClient.Reader.AsStream());
+
+        try
+        {
+            return await McpProbe.ListToolsAsync(
+                toServer: toServer,
+                fromServer: fromServer,
+                cancellationToken: cancellationToken
+            );
+        }
+        finally
+        {
+            // End of input ends the session, as when a client closes the server's stdin
+            await clientToServer.Writer.CompleteAsync();
+        }
+    }
+}
