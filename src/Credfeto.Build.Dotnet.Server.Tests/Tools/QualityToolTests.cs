@@ -79,11 +79,41 @@ public sealed class QualityToolTests : TestBase, IDisposable
 
         Assert.True(condition: result.IsError, userMessage: tool + " ran without a manifest");
         Assert.Contains(
-            expectedSubstring: "no .NET tool manifest",
+            expectedSubstring: "No .NET tool manifest (.config/dotnet-tools.json or dotnet-tools.json) was found in the repository root "
+                + this._repository.Path
+                + " or any parent directory",
             actualString: Text(result),
             comparisonType: StringComparison.Ordinal
         );
         Assert.Empty(this._runner.Started);
+    }
+
+    [Theory]
+    [InlineData("buildcheck", ".config/dotnet-tools.json")]
+    [InlineData("cleanup", "dotnet-tools.json")]
+    [InlineData("changelog_lint", ".config/dotnet-tools.json")]
+    [InlineData("changelog_lint", "dotnet-tools.json")]
+    public async Task QualityToolsUseAToolManifestInAParentDirectoryAsync(string tool, string location)
+    {
+        await this.WriteManifestAsync(location);
+        string root = await this.NestedRepositoryWithAChangeAsync();
+
+        CallToolResult result = await this.CallAsync(
+            name: tool,
+            arguments: [with(StringComparer.Ordinal)],
+            buildtest: TestContexts.NoBuildtest,
+            root: root
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(expected: "dotnet", actual: definition.Steps[0].FileName);
+        Assert.Equal(
+            expected: ["tool", "restore"],
+            actual: definition.Steps[0].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(expected: root, actual: definition.Steps[0].WorkingDirectory);
     }
 
     [Fact]
@@ -271,6 +301,27 @@ public sealed class QualityToolTests : TestBase, IDisposable
         );
     }
 
+    private async ValueTask<string> NestedRepositoryWithAChangeAsync()
+    {
+        CancellationToken cancellationToken = this.CancellationToken();
+        string root = this._repository.Combine("checkouts/repo");
+        _ = Directory.CreateDirectory(root);
+        await TestGit.RunAsync(repository: root, arguments: ["init", "--quiet"], cancellationToken: cancellationToken);
+        _ = await this._repository.WriteAsync(
+            relative: "checkouts/repo/CHANGELOG.md",
+            content: "# Changelog\n",
+            cancellationToken: cancellationToken
+        );
+        await TestGit.CommitAllAsync(repository: root, message: "base", cancellationToken: cancellationToken);
+        _ = await this._repository.WriteAsync(
+            relative: "checkouts/repo/src/New.cs",
+            content: "class New{}\n",
+            cancellationToken: cancellationToken
+        );
+
+        return root;
+    }
+
     private void AssertToolRestore(ProcessStep step)
     {
         Assert.Equal(expected: "dotnet", actual: step.FileName);
@@ -298,8 +349,18 @@ public sealed class QualityToolTests : TestBase, IDisposable
         BuildtestLocator buildtest
     )
     {
+        return this.CallAsync(name: name, arguments: arguments, buildtest: buildtest, root: this._repository.Path);
+    }
+
+    private ValueTask<CallToolResult> CallAsync(
+        string name,
+        Dictionary<string, JsonElement> arguments,
+        BuildtestLocator buildtest,
+        string root
+    )
+    {
         DotnetDetection detection = TestRepositories.Detected(
-            TestRepositories.Create(root: this._repository.Path, TestRepositories.CoreTests)
+            TestRepositories.Create(root: root, TestRepositories.CoreTests)
         );
         ToolContext context = TestContexts.Create(runner: this._runner, detection: detection, buildtest: buildtest);
 

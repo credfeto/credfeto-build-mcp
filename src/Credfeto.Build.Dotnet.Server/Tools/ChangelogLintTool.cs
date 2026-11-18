@@ -17,7 +17,7 @@ public sealed class ChangelogLintTool : BuildTool
         : base(
             name: ToolNames.CHANGELOG_LINT,
             title: "Lint the changelog",
-            description: "Starts a job that runs dotnet tool restore, then dotnet changelog --changelog <repo>/CHANGELOG.md --lint, as pr-lint does. Needs a .NET tool manifest and a CHANGELOG.md at the repository root. Returns the job id at once; call job_result to wait for its outcome",
+            description: "Starts a job that runs dotnet tool restore, then dotnet changelog --changelog <repo>/CHANGELOG.md --lint, as pr-lint does. Needs a .NET tool manifest in the repository root or a parent directory, and a CHANGELOG.md at the repository root. Returns the job id at once; call job_result to wait for its outcome",
             schema: [],
             readOnly: false
         )

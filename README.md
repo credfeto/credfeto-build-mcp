@@ -120,9 +120,11 @@ credentials in URLs. Lines are capped at 4,096 characters and each log at 16 MiB
 ### Quality tools and buildtest
 
 `buildcheck`, `cleanup` and `changelog_lint` run the repository's own .NET tools from its tool manifest, from the
-repository root, so the versions are the ones the repository pins. Each job runs `dotnet tool restore` first. A
-repository with no `.config/dotnet-tools.json` or `dotnet-tools.json` gets a clear tool error and no job;
-`changelog_lint` also needs a `CHANGELOG.md` at the root.
+repository root, so the versions are the ones the repository pins. Each job runs `dotnet tool restore` first. The
+manifest is found the way `dotnet tool run` finds it: `.config/dotnet-tools.json`, then `dotnet-tools.json`, in the
+repository root and then in each parent directory up to the filesystem root, so a manifest shared by several checkouts
+works. With no manifest anywhere up the tree the tool gives a clear error and starts no job; `changelog_lint` also
+needs a `CHANGELOG.md` at the root.
 
 `cleanup` picks its files with git. The default branch is `origin/HEAD`, else the first of `origin/main`,
 `origin/master`, `main` and `master` that exists. Files under `bin/` or `obj/`, and files that no longer exist, are
