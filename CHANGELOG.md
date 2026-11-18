@@ -14,9 +14,9 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Fixed
 - `buildcheck`, `cleanup` and `changelog_lint` find the .NET tool manifest the way `dotnet tool run` does, in the repository root and then each parent directory up to the filesystem root, instead of refusing to run when the manifest is above the repository; the refusal now names the directory searched up from (#45)
 ### Changed
-- `buildcheck` runs in-process from `FunFair.BuildCheck.Runner` without needing a .NET tool manifest, and `changelog_lint` is removed in favour of the changelog MCP lint tool (#46)
 ### Deprecated
 ### Removed
+- The `changelog_lint` tool; lint `CHANGELOG.md` with `changelog_lint` on the changelog MCP server instead (#46)
 ### Deployment Changes
 
 <!--

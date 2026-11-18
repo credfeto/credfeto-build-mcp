@@ -98,7 +98,6 @@ The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerat
 | `coverage` | `project`: `all` (default) or one of the unit test projects; `write_report`: `false` (default) or `true`, with `project` `all` only | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. With `write_report`, a successful run updates the `## .NET` section of `COVERAGE.md` at the repository root and `job_result` gives the file's path in `coverageReportPath`. |
 | `buildcheck` | `mode`: `pre_release` (default) or `release` | Starts `dotnet tool restore`, then `dotnet buildcheck -Solution <absolute solution> -WarningAsErrors true -PreReleaseBuild <true\|false>`. |
 | `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |
-| `changelog_lint` | none | Starts `dotnet tool restore`, then `dotnet changelog --changelog <repo>/CHANGELOG.md --lint`. |
 | `buildtest` | none | Starts the installed pre-commit `buildtest` script, with no arguments, from the repository root. |
 | `job_status` | `id` | A single, instant look at whether the job is still running, how long it has run and which step it is on. |
 | `job_result` | `id`; `wait_seconds`: 0 to 600, default 240 | Waits up to `wait_seconds` for the job to finish, then returns the outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. `0` answers at once. |
@@ -119,12 +118,16 @@ credentials in URLs. Lines are capped at 4,096 characters and each log at 16 MiB
 
 ### Quality tools and buildtest
 
-`buildcheck`, `cleanup` and `changelog_lint` run the repository's own .NET tools from its tool manifest, from the
-repository root, so the versions are the ones the repository pins. Each job runs `dotnet tool restore` first. The
-manifest is found the way `dotnet tool run` finds it: `.config/dotnet-tools.json`, then `dotnet-tools.json`, in the
-repository root and then in each parent directory up to the filesystem root, so a manifest shared by several checkouts
-works. With no manifest anywhere up the tree the tool gives a clear error and starts no job; `changelog_lint` also
-needs a `CHANGELOG.md` at the root.
+`buildcheck` and `cleanup` run the repository's own .NET tools from its tool manifest, from the repository root, so
+the versions are the ones the repository pins. Each job runs `dotnet tool restore` first. The manifest is found the
+way `dotnet tool run` finds it: `.config/dotnet-tools.json`, then `dotnet-tools.json`, in the repository root and then
+in each parent directory up to the filesystem root, so a manifest shared by several checkouts works. With no manifest
+anywhere up the tree the tool gives a clear error and starts no job.
+
+`buildcheck` stays a shell-out because the `FunFair.BuildCheck.Runner` library cannot yet be compiled into this
+Native AOT server: its `global.json` loader uses reflection-based JSON deserialization (IL2026/IL3050).
+
+`CHANGELOG.md` is linted by `changelog_lint` on the separate changelog MCP server, not by this server.
 
 `cleanup` picks its files with git. The default branch is `origin/HEAD`, else the first of `origin/main`,
 `origin/master`, `main` and `master` that exists. Files under `bin/` or `obj/`, and files that no longer exist, are

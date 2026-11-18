@@ -33,7 +33,6 @@ public sealed class DotnetToolCatalogTests : TestBase
                 "build",
                 "buildcheck",
                 "buildtest",
-                "changelog_lint",
                 "cleanup",
                 "coverage",
                 "detect",
@@ -57,7 +56,6 @@ public sealed class DotnetToolCatalogTests : TestBase
                 "build",
                 "buildcheck",
                 "buildtest",
-                "changelog_lint",
                 "cleanup",
                 "detect",
                 "job_result",
@@ -149,7 +147,6 @@ public sealed class DotnetToolCatalogTests : TestBase
             actual: Enum(schema: Schema(tools: tools, name: "cleanup"), property: "scope"),
             comparer: StringComparer.Ordinal
         );
-        Assert.Empty(Schema(tools: tools, name: "changelog_lint").GetProperty("properties").EnumerateObject());
         Assert.Empty(Schema(tools: tools, name: "buildtest").GetProperty("properties").EnumerateObject());
     }
 

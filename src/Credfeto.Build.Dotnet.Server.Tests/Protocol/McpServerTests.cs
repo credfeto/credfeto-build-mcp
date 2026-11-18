@@ -30,7 +30,6 @@ public sealed class McpServerTests : TestBase
         "coverage",
         "buildcheck",
         "cleanup",
-        "changelog_lint",
         "buildtest",
         "job_status",
         "job_result",
