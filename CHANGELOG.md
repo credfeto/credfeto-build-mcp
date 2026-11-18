@@ -12,6 +12,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 ### Fixed
+- `buildcheck`, `cleanup` and `changelog_lint` find the .NET tool manifest the way `dotnet tool run` does, in the repository root and then each parent directory up to the filesystem root, instead of refusing to run when the manifest is above the repository; the refusal now names the directory searched up from (#45)
 ### Changed
 ### Deprecated
 ### Removed

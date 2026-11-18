@@ -27,7 +27,7 @@ public sealed class CleanupTool : BuildTool
         : base(
             name: ToolNames.CLEANUP,
             title: "Format C# files",
-            description: "Starts a job that runs dotnet tool restore, then the repository's formatter, dotnet cscleanup, on the .cs files changed against the merge-base with the default branch (committed, staged, unstaged and untracked; scope changed) or on every tracked .cs file (scope all). It rewrites files in place; job_result lists in changedFiles the ones it changed. Needs a .NET tool manifest in the repository. Returns the job id at once; call job_result to wait for its outcome",
+            description: "Starts a job that runs dotnet tool restore, then the repository's formatter, dotnet cscleanup, on the .cs files changed against the merge-base with the default branch (committed, staged, unstaged and untracked; scope changed) or on every tracked .cs file (scope all). It rewrites files in place; job_result lists in changedFiles the ones it changed. Needs a .NET tool manifest in the repository root or a parent directory. Returns the job id at once; call job_result to wait for its outcome",
             schema: [scope],
             readOnly: false
         )

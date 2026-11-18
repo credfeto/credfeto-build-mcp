@@ -23,7 +23,7 @@ public sealed class BuildCheckTool : BuildTool
         : base(
             name: ToolNames.BUILDCHECK,
             title: "Check project settings",
-            description: "Starts a job that runs dotnet tool restore, then the repository's dotnet buildcheck on the solution with warnings as errors, for a pre-release or a release build. Needs a .NET tool manifest in the repository. Returns the job id at once; call job_result to wait for its outcome",
+            description: "Starts a job that runs dotnet tool restore, then the repository's dotnet buildcheck on the solution with warnings as errors, for a pre-release or a release build. Needs a .NET tool manifest in the repository root or a parent directory. Returns the job id at once; call job_result to wait for its outcome",
             schema: [mode],
             readOnly: false
         )
