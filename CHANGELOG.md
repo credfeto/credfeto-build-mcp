@@ -12,16 +12,20 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 ### Fixed
-- `buildcheck`, `cleanup` and `changelog_lint` find the .NET tool manifest the way `dotnet tool run` does, in the repository root and then each parent directory up to the filesystem root, instead of refusing to run when the manifest is above the repository; the refusal now names the directory searched up from (#45)
 ### Changed
 ### Deprecated
 ### Removed
-- The `changelog_lint` tool; lint `CHANGELOG.md` with `changelog_lint` on the changelog MCP server instead (#46)
 ### Deployment Changes
 
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
+## [0.0.9] - 2026-11-19
+### Fixed
+- `buildcheck`, `cleanup` and `changelog_lint` find the .NET tool manifest the way `dotnet tool run` does, in the repository root and then each parent directory up to the filesystem root, instead of refusing to run when the manifest is above the repository; the refusal now names the directory searched up from (#45)
+### Removed
+- The `changelog_lint` tool; lint `CHANGELOG.md` with `changelog_lint` on the changelog MCP server instead (#46)
 
 ## [0.0.8] - 2026-11-17
 ### Added
