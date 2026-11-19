@@ -66,7 +66,6 @@ public sealed class QualityToolTests : TestBase, IDisposable
     [Theory]
     [InlineData("buildcheck")]
     [InlineData("cleanup")]
-    [InlineData("changelog_lint")]
     public async Task QualityToolsWithoutAToolManifestFailClearlyAsync(string tool)
     {
         _ = await this._repository.WriteAsync(
@@ -91,8 +90,8 @@ public sealed class QualityToolTests : TestBase, IDisposable
     [Theory]
     [InlineData("buildcheck", ".config/dotnet-tools.json")]
     [InlineData("cleanup", "dotnet-tools.json")]
-    [InlineData("changelog_lint", ".config/dotnet-tools.json")]
-    [InlineData("changelog_lint", "dotnet-tools.json")]
+    [InlineData("buildcheck", "dotnet-tools.json")]
+    [InlineData("cleanup", ".config/dotnet-tools.json")]
     public async Task QualityToolsUseAToolManifestInAParentDirectoryAsync(string tool, string location)
     {
         await this.WriteManifestAsync(location);
@@ -114,45 +113,6 @@ public sealed class QualityToolTests : TestBase, IDisposable
             comparer: StringComparer.Ordinal
         );
         Assert.Equal(expected: root, actual: definition.Steps[0].WorkingDirectory);
-    }
-
-    [Fact]
-    public async Task ChangelogLintLintsTheRootChangelogAsync()
-    {
-        await this.WriteManifestAsync("dotnet-tools.json");
-        string changelog = await this._repository.WriteAsync(
-            relative: "CHANGELOG.md",
-            content: "# Changelog\n",
-            cancellationToken: this.CancellationToken()
-        );
-
-        CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: [with(StringComparer.Ordinal)]);
-
-        Assert.False(condition: result.IsError, userMessage: Text(result));
-        JobDefinition definition = Assert.Single(this._runner.Started);
-        this.AssertToolRestore(definition.Steps[0]);
-        Assert.Equal(
-            expected: ["changelog", "--changelog", changelog, "--lint"],
-            actual: definition.Steps[1].Arguments,
-            comparer: StringComparer.Ordinal
-        );
-        Assert.Equal(expected: this._repository.Path, actual: definition.Steps[1].WorkingDirectory);
-    }
-
-    [Fact]
-    public async Task ChangelogLintWithoutAChangelogFailsClearlyAsync()
-    {
-        await this.WriteManifestAsync(".config/dotnet-tools.json");
-
-        CallToolResult result = await this.CallAsync(name: "changelog_lint", arguments: [with(StringComparer.Ordinal)]);
-
-        Assert.True(condition: result.IsError, userMessage: "linted a missing changelog");
-        Assert.Contains(
-            expectedSubstring: "CHANGELOG.md",
-            actualString: Text(result),
-            comparisonType: StringComparison.Ordinal
-        );
-        Assert.Empty(this._runner.Started);
     }
 
     [Fact]

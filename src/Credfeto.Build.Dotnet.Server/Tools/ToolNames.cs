@@ -12,7 +12,6 @@ public static class ToolNames
     public const string COVERAGE = "coverage";
     public const string BUILDCHECK = "buildcheck";
     public const string CLEANUP = "cleanup";
-    public const string CHANGELOG_LINT = "changelog_lint";
     public const string BUILDTEST = "buildtest";
     public const string JOB_STATUS = JobToolNames.JOB_STATUS;
     public const string JOB_RESULT = JobToolNames.JOB_RESULT;

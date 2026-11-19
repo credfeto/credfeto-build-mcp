@@ -16,6 +16,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Changed
 ### Deprecated
 ### Removed
+- The `changelog_lint` tool; lint `CHANGELOG.md` with `changelog_lint` on the changelog MCP server instead (#46)
 ### Deployment Changes
 
 <!--

@@ -218,11 +218,6 @@ public sealed class DotnetCommandsTests : TestBase
             comparer: StringComparer.Ordinal
         );
         Assert.Equal(
-            expected: ["changelog", "--changelog", "/workspace/repo/CHANGELOG.md", "--lint"],
-            actual: DotnetCommands.ChangelogLint(Repository).Arguments,
-            comparer: StringComparer.Ordinal
-        );
-        Assert.Equal(
             expected: ["cscleanup", "/workspace/repo/src/A.cs", "/workspace/repo/src/B.cs"],
             actual: DotnetCommands
                 .Cleanup(
@@ -243,7 +238,6 @@ public sealed class DotnetCommandsTests : TestBase
             {
                 DotnetCommands.ToolRestore(Repository),
                 DotnetCommands.BuildCheck(repository: Repository, preRelease: false),
-                DotnetCommands.ChangelogLint(Repository),
                 buildtest,
             }
         )

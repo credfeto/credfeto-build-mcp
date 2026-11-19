@@ -30,7 +30,6 @@ public static class DotnetToolCatalog
 
         tools.Add(new BuildCheckTool(context));
         tools.Add(new CleanupTool(context));
-        tools.Add(new ChangelogLintTool(context));
         tools.Add(new BuildtestTool(context));
         tools.Add(new JobStatusTool(context.Runner));
         tools.Add(new JobResultTool(context.Runner));

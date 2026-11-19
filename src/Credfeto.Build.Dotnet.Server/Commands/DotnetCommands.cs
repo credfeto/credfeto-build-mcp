@@ -12,7 +12,6 @@ public static class DotnetCommands
     public const string CONFIGURATION = "Release";
     public const string COVERAGE_DIRECTORY = "coverage";
     public const string COVERAGE_FILE_SUFFIX = ".coverage.cobertura.xml";
-    public const string CHANGELOG_FILE = "CHANGELOG.md";
 
     // The MSBuild properties pre-commit buildtest passes to both its build and its test step; keep them in step
     public static readonly IReadOnlyList<string> BuildProperties =
@@ -204,24 +203,9 @@ public static class DotnetCommands
         return RootStep(name: name, repository: repository, fileName: DOTNET, arguments: ["cscleanup", .. files]);
     }
 
-    public static ProcessStep ChangelogLint(DotnetRepository repository)
-    {
-        return RootStep(
-            name: "changelog lint",
-            repository: repository,
-            fileName: DOTNET,
-            arguments: ["changelog", "--changelog", ChangelogPath(repository), "--lint"]
-        );
-    }
-
     public static ProcessStep Buildtest(DotnetRepository repository, string script)
     {
         return RootStep(name: "buildtest", repository: repository, fileName: script, arguments: []);
-    }
-
-    public static string ChangelogPath(DotnetRepository repository)
-    {
-        return Path.Combine(path1: repository.RepositoryRoot, path2: CHANGELOG_FILE);
     }
 
     public static ProcessStep Coverage(DotnetRepository repository, DotnetProject project)
