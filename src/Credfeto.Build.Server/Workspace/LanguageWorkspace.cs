@@ -23,7 +23,7 @@ public sealed class LanguageWorkspace<TDetection> : IDetectionSource<TDetection>
         this._current = initial;
         this._signature = language.Signature(initial);
         this.Tools = [];
-        this.AddSorted(initial);
+        this.AddAll(SortedTools(language, initial));
     }
 
     public McpServerPrimitiveCollection<McpServerTool> Tools { get; }
@@ -74,20 +74,31 @@ public sealed class LanguageWorkspace<TDetection> : IDetectionSource<TDetection>
 
     private void Replace(TDetection detection)
     {
+        McpServerTool[] tools = SortedTools(this._language, detection);
+
         using (this.Tools.DeferChangedEvents())
         {
             this.Tools.Clear();
-            this.AddSorted(detection);
+            this.AddAll(tools);
         }
     }
 
     // The collection lists tools in the order they were added, so adding them by name keeps tools/list sorted
-    private void AddSorted(TDetection detection)
+    private static McpServerTool[] SortedTools(IWorkspaceLanguage<TDetection> language, TDetection detection)
     {
-        IEnumerable<McpServerTool> tools = this
-            ._language.CreateTools(detection)
-            .OrderBy(keySelector: static tool => tool.ProtocolTool.Name, comparer: StringComparer.OrdinalIgnoreCase);
+        return
+        [
+            .. language
+                .CreateTools(detection)
+                .OrderBy(
+                    keySelector: static tool => tool.ProtocolTool.Name,
+                    comparer: StringComparer.OrdinalIgnoreCase
+                ),
+        ];
+    }
 
+    private void AddAll(McpServerTool[] tools)
+    {
         foreach (McpServerTool tool in tools)
         {
             this.Tools.Add(tool);
