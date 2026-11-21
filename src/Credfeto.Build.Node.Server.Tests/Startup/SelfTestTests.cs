@@ -43,15 +43,15 @@ public sealed class SelfTestTests : TestBase
         Assert.Equal(
             expected:
             [
-                "detect",
-                "restore",
-                "build",
-                "lint",
-                "test",
                 "add_package",
-                "update_package",
-                "job_status",
+                "build",
+                "detect",
                 "job_result",
+                "job_status",
+                "lint",
+                "restore",
+                "test",
+                "update_package",
             ],
             actual: workspace.Tools.Select(static tool => tool.ProtocolTool.Name),
             comparer: StringComparer.Ordinal

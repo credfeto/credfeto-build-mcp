@@ -22,14 +22,14 @@ public sealed class McpServerTests : TestBase
 {
     private static readonly string[] AllTools =
     [
-        "detect",
-        "restore",
-        "build",
-        "test",
         "add_package",
-        "update_package",
-        "job_status",
+        "build",
+        "detect",
         "job_result",
+        "job_status",
+        "restore",
+        "test",
+        "update_package",
     ];
 
     [Fact]

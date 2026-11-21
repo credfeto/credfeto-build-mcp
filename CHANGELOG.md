@@ -13,6 +13,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Added
 ### Fixed
 ### Changed
+- MCP tools/list now returns tools sorted by name (case-insensitive ordinal order) on both the .NET and Node servers, so clients get a stable, predictable tool list - #49
 ### Deprecated
 ### Removed
 ### Deployment Changes

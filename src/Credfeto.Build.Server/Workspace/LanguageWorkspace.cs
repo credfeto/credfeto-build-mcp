@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ModelContextProtocol.Server;
@@ -22,11 +23,7 @@ public sealed class LanguageWorkspace<TDetection> : IDetectionSource<TDetection>
         this._current = initial;
         this._signature = language.Signature(initial);
         this.Tools = [];
-
-        foreach (McpServerTool tool in language.CreateTools(initial))
-        {
-            this.Tools.Add(tool);
-        }
+        this.AddAll(SortedTools(language, initial));
     }
 
     public McpServerPrimitiveCollection<McpServerTool> Tools { get; }
@@ -77,16 +74,34 @@ public sealed class LanguageWorkspace<TDetection> : IDetectionSource<TDetection>
 
     private void Replace(TDetection detection)
     {
-        IReadOnlyList<McpServerTool> tools = this._language.CreateTools(detection);
+        McpServerTool[] tools = SortedTools(this._language, detection);
 
         using (this.Tools.DeferChangedEvents())
         {
             this.Tools.Clear();
+            this.AddAll(tools);
+        }
+    }
 
-            foreach (McpServerTool tool in tools)
-            {
-                this.Tools.Add(tool);
-            }
+    // The collection lists tools in the order they were added, so adding them by name keeps tools/list sorted
+    private static McpServerTool[] SortedTools(IWorkspaceLanguage<TDetection> language, TDetection detection)
+    {
+        return
+        [
+            .. language
+                .CreateTools(detection)
+                .OrderBy(
+                    keySelector: static tool => tool.ProtocolTool.Name,
+                    comparer: StringComparer.OrdinalIgnoreCase
+                ),
+        ];
+    }
+
+    private void AddAll(McpServerTool[] tools)
+    {
+        foreach (McpServerTool tool in tools)
+        {
+            this.Tools.Add(tool);
         }
     }
 }

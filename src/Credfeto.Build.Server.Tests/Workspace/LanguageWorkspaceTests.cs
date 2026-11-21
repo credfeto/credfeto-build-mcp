@@ -69,6 +69,39 @@ public sealed class LanguageWorkspaceTests : TestBase
     }
 
     [Fact]
+    public static void TheInitialToolsAreInNameOrder()
+    {
+        FakeDetection outOfOrder = new(Signature: "one", ToolNames: ["zeta", "alpha", "Mike", "Bravo", "job_status"]);
+        using LanguageWorkspace<FakeDetection> workspace = new(
+            initial: outOfOrder,
+            language: new FakeLanguage(outOfOrder)
+        );
+
+        Assert.Equal(
+            expected: ["alpha", "Bravo", "job_status", "Mike", "zeta"],
+            actual: OfferedNames(workspace),
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task ARefreshedToolListIsInNameOrderAsync()
+    {
+        FakeLanguage language = new(
+            new(Signature: "two", ToolNames: ["yankee", "charlie", "Xray", "Delta", "job_result"])
+        );
+        using LanguageWorkspace<FakeDetection> workspace = new(initial: Initial, language: language);
+
+        _ = await workspace.RefreshAsync(this.CancellationToken());
+
+        Assert.Equal(
+            expected: ["charlie", "Delta", "job_result", "Xray", "yankee"],
+            actual: OfferedNames(workspace),
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
     public static void TheLanguageDecidesWhichFailuresAreTransient()
     {
         using LanguageWorkspace<FakeDetection> workspace = new(initial: Initial, language: new FakeLanguage(Initial));
@@ -86,5 +119,10 @@ public sealed class LanguageWorkspaceTests : TestBase
     private static string[] Names(LanguageWorkspace<FakeDetection> workspace)
     {
         return [.. workspace.Tools.Select(static tool => tool.ProtocolTool.Name).Order(StringComparer.Ordinal)];
+    }
+
+    private static string[] OfferedNames(LanguageWorkspace<FakeDetection> workspace)
+    {
+        return [.. workspace.Tools.Select(static tool => tool.ProtocolTool.Name)];
     }
 }
