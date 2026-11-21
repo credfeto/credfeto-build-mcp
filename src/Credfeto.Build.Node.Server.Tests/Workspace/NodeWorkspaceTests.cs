@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Tests.Helpers;
@@ -97,6 +98,30 @@ public sealed class NodeWorkspaceTests : TestBase, IDisposable
                 mayBeDirectory: false
             ),
             userMessage: "a manifest change counts"
+        );
+    }
+
+    [Fact]
+    public async Task TheToolsAreInNameOrderAsync()
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        NodeDetection detection = await NodeDetector.DetectAsync(
+            repositoryRoot: this._repository.Path,
+            cancellationToken: this.CancellationToken()
+        );
+        using NodeWorkspace workspace = new(
+            initial: detection,
+            runner: new RecordingJobRunner(),
+            npm: TestTools.FakeNpm
+        );
+
+        string[] names = [.. workspace.Tools.Select(static tool => tool.ProtocolTool.Name)];
+
+        Assert.True(condition: names.Length > 1, userMessage: "an npm repository offers several tools");
+        Assert.Equal(
+            expected: names.Order(StringComparer.OrdinalIgnoreCase),
+            actual: names,
+            comparer: StringComparer.Ordinal
         );
     }
 

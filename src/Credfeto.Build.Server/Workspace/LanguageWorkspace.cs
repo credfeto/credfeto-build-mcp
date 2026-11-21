@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ModelContextProtocol.Server;
@@ -22,11 +23,7 @@ public sealed class LanguageWorkspace<TDetection> : IDetectionSource<TDetection>
         this._current = initial;
         this._signature = language.Signature(initial);
         this.Tools = [];
-
-        foreach (McpServerTool tool in language.CreateTools(initial))
-        {
-            this.Tools.Add(tool);
-        }
+        this.AddSorted(initial);
     }
 
     public McpServerPrimitiveCollection<McpServerTool> Tools { get; }
@@ -77,16 +74,23 @@ public sealed class LanguageWorkspace<TDetection> : IDetectionSource<TDetection>
 
     private void Replace(TDetection detection)
     {
-        IReadOnlyList<McpServerTool> tools = this._language.CreateTools(detection);
-
         using (this.Tools.DeferChangedEvents())
         {
             this.Tools.Clear();
+            this.AddSorted(detection);
+        }
+    }
 
-            foreach (McpServerTool tool in tools)
-            {
-                this.Tools.Add(tool);
-            }
+    // The collection lists tools in the order they were added, so adding them by name keeps tools/list sorted
+    private void AddSorted(TDetection detection)
+    {
+        IEnumerable<McpServerTool> tools = this
+            ._language.CreateTools(detection)
+            .OrderBy(keySelector: static tool => tool.ProtocolTool.Name, comparer: StringComparer.OrdinalIgnoreCase);
+
+        foreach (McpServerTool tool in tools)
+        {
+            this.Tools.Add(tool);
         }
     }
 }

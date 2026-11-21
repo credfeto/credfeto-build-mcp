@@ -90,17 +90,17 @@ The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerat
 
 | Tool | Parameters | What it does |
 | --- | --- | --- |
+| `build` | none | Starts `dotnet restore <solution>`, then `dotnet build <solution> -c Release --no-restore <buildtest properties> -nodeReuse:False` from the solution directory: the whole solution. |
+| `buildcheck` | `mode`: `pre_release` (default) or `release` | Starts `dotnet tool restore`, then `dotnet buildcheck -Solution <absolute solution> -WarningAsErrors true -PreReleaseBuild <true\|false>`. |
+| `buildtest` | none | Starts the installed pre-commit `buildtest` script, with no arguments, from the repository root. |
+| `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |
+| `coverage` | `project`: `all` (default) or one of the unit test projects; `write_report`: `false` (default) or `true`, with `project` `all` only | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. With `write_report`, a successful run updates the `## .NET` section of `COVERAGE.md` at the repository root and `job_result` gives the file's path in `coverageReportPath`. |
 | `detect` | none | The solution, its projects, the unit, integration and benchmark test projects, the timeout and any overrides error, detected afresh. |
+| `job_result` | `id`; `wait_seconds`: 0 to 600, default 240 | Waits up to `wait_seconds` for the job to finish, then returns the outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. `0` answers at once. |
+| `job_status` | `id` | A single, instant look at whether the job is still running, how long it has run and which step it is on. |
 | `package_versions` | `package_id` (required, a NuGet package id); `include_prerelease`: `false` (default, release versions only) or `true`; `take`: 1 to 500, default 20 | Answers at once, no job. Runs `dotnet package search <id> --exact-match --format json [--prerelease]` from the solution directory with no `--source`, so the repository's NuGet.config hierarchy picks the sources, then reads the package source mapping from the files `dotnet nuget config paths` lists (the search itself ignores the mapping). Returns, for each source that lists the package, its newest `take` versions (newest first, NuGet ordering), the version count, the latest stable and prerelease version and `usedByRestore`; plus the overall latest stable and prerelease version from the sources restore would use, and any per-source problems (with user info and query strings cut from the URLs they quote). A package no source lists is a tool error. Use it instead of querying nuget.org, which misses private feeds and ignores the mapping; MSBuild SDK packages work the same way. |
 | `restore` | none | Starts `dotnet restore <solution>`. |
-| `build` | none | Starts `dotnet restore <solution>`, then `dotnet build <solution> -c Release --no-restore <buildtest properties> -nodeReuse:False` from the solution directory: the whole solution. |
 | `test` | `scope`: `all` (default) or `project`; `project`: one of the unit, integration or benchmark test projects | Runs the tests as pre-commit `buildtest` does: restore, build, then test with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8` and the `buildtest` properties. `all` builds the solution, then starts one `dotnet test --solution <solution>` run from the solution directory with `--filter-not-namespace` for `*.Integration.Tests`, `*.Integration.Tests.*`, `*.Benchmark.Tests` and `*.Benchmark.Tests.*`. `project` builds that project, then runs `dotnet test <Project>/<Project>.csproj ... -p:SolutionDir=<src>/` with no namespace filter. A failed restore or build ends the job, so the tests never run against stale binaries. |
-| `coverage` | `project`: `all` (default) or one of the unit test projects; `write_report`: `false` (default) or `true`, with `project` `all` only | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. With `write_report`, a successful run updates the `## .NET` section of `COVERAGE.md` at the repository root and `job_result` gives the file's path in `coverageReportPath`. |
-| `buildcheck` | `mode`: `pre_release` (default) or `release` | Starts `dotnet tool restore`, then `dotnet buildcheck -Solution <absolute solution> -WarningAsErrors true -PreReleaseBuild <true\|false>`. |
-| `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |
-| `buildtest` | none | Starts the installed pre-commit `buildtest` script, with no arguments, from the repository root. |
-| `job_status` | `id` | A single, instant look at whether the job is still running, how long it has run and which step it is on. |
-| `job_result` | `id`; `wait_seconds`: 0 to 600, default 240 | Waits up to `wait_seconds` for the job to finish, then returns the outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. `0` answers at once. |
 
 Every tool except `detect`, `package_versions`, `job_status` and `job_result` starts a **job** and returns its id at once, so no MCP
 call or Bash timeout applies to a long build. Call `job_result`, which waits for the job to finish; if `state` is
@@ -331,15 +331,15 @@ watched directory, or by the next `detect` call, which always detects afresh.
 
 | Tool | Parameters | What it does |
 | --- | --- | --- |
-| `detect` | none | Lists the install roots and their lock files, the packages with their directories, install roots, scripts and test runners, the timeout and any overrides error, as they are now. |
-| `restore` | none | `npm ci --ignore-scripts --no-audit --no-fund` in every install root. The only install path. |
-| `build` | `package` | `npm run build`; offered only when some package has a `build` script. |
-| `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
-| `test` | `scope` (`unit` default, `all`), `package` | `unit` runs `test:noe2e` where a package has it (as the pre-commit hook does), otherwise `test`; `all` runs `test`. `node.testScript` replaces the choice. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
-| `coverage` | `package`; `write_report`: `false` (default) or `true`, with `package` `all` only | Runs the package's own coverage script and reads the Cobertura report it writes; offered only when some package has a `test:coverage` script, or the script `node.coverageScript` names. See Node coverage below. |
 | `add_package` | `package_id`, `version` (optional), `dev`, `package` | `npm install <id>@<version>` into one package's `package.json` (`--save-dev` with `dev`), then lists the version installed. |
+| `build` | `package` | `npm run build`; offered only when some package has a `build` script. |
+| `coverage` | `package`; `write_report`: `false` (default) or `true`, with `package` `all` only | Runs the package's own coverage script and reads the Cobertura report it writes; offered only when some package has a `test:coverage` script, or the script `node.coverageScript` names. See Node coverage below. |
+| `detect` | none | Lists the install roots and their lock files, the packages with their directories, install roots, scripts and test runners, the timeout and any overrides error, as they are now. |
+| `job_result`, `job_status` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
+| `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
+| `restore` | none | `npm ci --ignore-scripts --no-audit --no-fund` in every install root. The only install path. |
+| `test` | `scope` (`unit` default, `all`), `package` | `unit` runs `test:noe2e` where a package has it (as the pre-commit hook does), otherwise `test`; `all` runs `test`. `node.testScript` replaces the choice. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
 | `update_package` | `package_id`, `version` (optional, `latest` when left out), `package` (`all` default) | `npm install <id>@<version>` in each chosen package whose `package.json` declares it, keeping its section, then lists the version installed. |
-| `job_status`, `job_result` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
 
 Every tool except `detect`, `job_status` and `job_result` starts a job and returns its id at once.
 

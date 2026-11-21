@@ -83,6 +83,22 @@ public sealed class DotnetWorkspaceTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task TheToolsAreInNameOrderAsync()
+    {
+        await SampleRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        using DotnetWorkspace workspace = await this.CreateAsync();
+
+        string[] names = [.. workspace.Tools.Select(static tool => tool.ProtocolTool.Name)];
+
+        Assert.True(condition: names.Length > 1, userMessage: "a .NET repository offers several tools");
+        Assert.Equal(
+            expected: names.Order(StringComparer.OrdinalIgnoreCase),
+            actual: names,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
     public async Task AProjectAddedAfterTheSchemaWasPublishedIsAcceptedAsync()
     {
         await SampleRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
