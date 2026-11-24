@@ -27,9 +27,9 @@ public sealed partial class BuildToolTests : TestBase
         Required: false
     );
 
-    private static readonly SchemaProperty Report = new(
-        Name: "write_report",
-        Description: "Whether to write the report",
+    private static readonly SchemaProperty Verbose = new(
+        Name: "verbose",
+        Description: "Whether to say more",
         Values: null,
         Pattern: null,
         DefaultValue: SchemaProperty.FALSE,
@@ -77,7 +77,7 @@ public sealed partial class BuildToolTests : TestBase
         string answer = await this.CallAsync(arguments: Arguments.None(), execute: static arguments =>
             arguments.GetChoice(Scope)
             + "|"
-            + arguments.GetFlag(Report).ToString(CultureInfo.InvariantCulture)
+            + arguments.GetFlag(Verbose).ToString(CultureInfo.InvariantCulture)
             + "|"
             + arguments.GetInteger(Count).ToString(CultureInfo.InvariantCulture)
         );
@@ -104,8 +104,8 @@ public sealed partial class BuildToolTests : TestBase
         Assert.Equal(
             expected: "True",
             actual: await this.CallAsync(
-                arguments: Arguments.Flag(name: "write_report", value: true),
-                execute: static arguments => Read(arguments: arguments, name: "write_report")
+                arguments: Arguments.Flag(name: "verbose", value: true),
+                execute: static arguments => Read(arguments: arguments, name: "verbose")
             )
         );
         Assert.Equal(
@@ -119,7 +119,7 @@ public sealed partial class BuildToolTests : TestBase
 
     [Theory]
     [InlineData("scope", "everything", "Invalid value for scope; expected one of: all, unit")]
-    [InlineData("write_report", "true", "Invalid value for write_report; expected true or false")]
+    [InlineData("verbose", "true", "Invalid value for verbose; expected true or false")]
     [InlineData("count", "7", "Invalid value for count; expected a whole number from 1 to 10")]
     [InlineData(
         "package_id",
@@ -127,7 +127,7 @@ public sealed partial class BuildToolTests : TestBase
         "Invalid value for package_id; expected a value matching " + PACKAGE_PATTERN
     )]
     [InlineData("id", JOB_ID + "\n", "Invalid value for id; expected a job id from a previous call")]
-    [InlineData("unknown", "x", "Unknown parameter; this tool takes: scope, write_report, count, package_id, id")]
+    [InlineData("unknown", "x", "Unknown parameter; this tool takes: scope, verbose, count, package_id, id")]
     public async Task InvalidArgumentsAreToolErrorsWithFixedTextAsync(string name, string value, string message)
     {
         CallToolResult result = await this.ResultAsync(
@@ -229,7 +229,7 @@ public sealed partial class BuildToolTests : TestBase
         Func<ToolArguments, string> execute
     )
     {
-        EchoTool tool = new(schema: [Scope, Report, Count, Package, Id], execute: execute);
+        EchoTool tool = new(schema: [Scope, Verbose, Count, Package, Id], execute: execute);
 
         return tool.CallAsync(arguments: arguments, cancellationToken: this.CancellationToken());
     }
@@ -239,7 +239,7 @@ public sealed partial class BuildToolTests : TestBase
         return name switch
         {
             "scope" => arguments.GetChoice(Scope) ?? "none",
-            "write_report" => arguments.GetFlag(Report).ToString(CultureInfo.InvariantCulture),
+            "verbose" => arguments.GetFlag(Verbose).ToString(CultureInfo.InvariantCulture),
             "count" => arguments.GetInteger(Count).ToString(CultureInfo.InvariantCulture),
             "package_id" => arguments.GetMatching(property: Package, pattern: PackageId()),
             "id" => arguments.GetJobId(Id),

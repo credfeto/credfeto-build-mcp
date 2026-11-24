@@ -14,6 +14,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Fixed
 ### Changed
 - MCP tools/list now returns tools sorted by name (case-insensitive ordinal order) on both the .NET and Node servers, so clients get a stable, predictable tool list - #49
+- The .NET and Node `coverage` tools always write `COVERAGE.md` from a successful full run (`project`/`package` `all`); the opt-in report argument is removed, so there is no option to skip the report. A single-project or single-package run never writes it - #51
 ### Deprecated
 ### Removed
 ### Deployment Changes
