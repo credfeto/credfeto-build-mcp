@@ -8,6 +8,7 @@ using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Python.Server.Commands;
 using Credfeto.Build.Python.Server.Detection;
 using Credfeto.Build.Python.Server.Tools;
+using Credfeto.Build.Server.Commands;
 using Credfeto.Build.Server.Workspace;
 using ModelContextProtocol.Server;
 
@@ -19,9 +20,9 @@ public sealed class PythonWorkspace : IPythonDetectionSource, IRepositoryChangeH
 
     private readonly LanguageWorkspace<PythonDetection> _workspace;
 
-    public PythonWorkspace(PythonDetection initial, IJobRunner runner, PythonLocator python)
+    public PythonWorkspace(PythonDetection initial, IJobRunner runner, ICommandRunner commands, PythonLocator python)
     {
-        ToolContext context = new(detection: this, runner: runner, python: python);
+        ToolContext context = new(detection: this, runner: runner, commands: commands, python: python);
         this._workspace = new(
             initial: initial,
             language: new PythonWorkspaceLanguage(repositoryRoot: initial.RepositoryRoot, context: context)

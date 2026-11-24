@@ -46,6 +46,7 @@ public sealed class PythonWorkspaceTests : TestBase, IDisposable
         using PythonWorkspace workspace = new(
             initial: detection,
             runner: new RecordingJobRunner(),
+            commands: TestTools.VersionCommands(),
             python: TestTools.FakePython
         );
         await using RepositoryWatcher watcher = new(

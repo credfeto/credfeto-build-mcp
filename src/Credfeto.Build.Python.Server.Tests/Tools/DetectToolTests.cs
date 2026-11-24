@@ -27,12 +27,12 @@ public sealed class DetectToolTests : TestBase
     }
 
     [Fact]
-    public void AProjectOffersDetect()
+    public void AProjectOffersTheJobTools()
     {
         IReadOnlyList<McpServerTool> tools = TestTools.Catalog(TestTools.Detected(Repository()));
 
         Assert.Equal(
-            expected: ["detect"],
+            expected: ["detect", "restore", "test", "lint", "job_status", "job_result"],
             actual: tools.Select(static tool => tool.ProtocolTool.Name),
             comparer: StringComparer.Ordinal
         );
@@ -82,7 +82,11 @@ public sealed class DetectToolTests : TestBase
 
         CallToolResult result = await detect.CallAsync(arguments: null, cancellationToken: this.CancellationToken());
 
-        Assert.Single(tools);
+        Assert.Equal(
+            expected: ["detect", "restore", "job_status", "job_result"],
+            actual: tools.Select(static tool => tool.ProtocolTool.Name),
+            comparer: StringComparer.Ordinal
+        );
         Assert.False(condition: result.IsError, userMessage: TestTools.Text(result));
         using JsonDocument document = JsonDocument.Parse(TestTools.Text(result));
         JsonElement testSuite = document.RootElement.GetProperty("testSuiteWithoutManifest");

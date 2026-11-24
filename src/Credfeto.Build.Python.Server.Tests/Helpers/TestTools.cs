@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Python.Server.Commands;
 using Credfeto.Build.Python.Server.Detection;
@@ -20,6 +21,10 @@ internal static class TestTools
 
     public static readonly PythonLocator FakePython = new(static _ => PYTHON);
 
+    public const string VERSION_STEP = "python version";
+
+    public static readonly PythonLocator FakeTools = new(static name => "/usr/bin/" + name);
+
     public static ToolContext Context(PythonDetection detection)
     {
         return Context(detection: detection, runner: new RecordingJobRunner(), python: FakePython);
@@ -27,7 +32,18 @@ internal static class TestTools
 
     public static ToolContext Context(PythonDetection detection, IJobRunner runner, PythonLocator python)
     {
-        return new(detection: new FixedDetectionSource(detection), runner: runner, python: python);
+        return new(
+            detection: new FixedDetectionSource(detection),
+            runner: runner,
+            commands: VersionCommands(),
+            python: python
+        );
+    }
+
+    // A command runner that answers the interpreter version probe with 3.13.1
+    public static FakeCommandRunner VersionCommands()
+    {
+        return new FakeCommandRunner().Answer(stepName: VERSION_STEP, standardOutput: "3.13.1\n");
     }
 
     public static IReadOnlyList<McpServerTool> Catalog(PythonDetection detection)
@@ -66,5 +82,20 @@ internal static class TestTools
     public static string Text(CallToolResult result)
     {
         return string.Concat(result.Content.OfType<TextContentBlock>().Select(static block => block.Text));
+    }
+
+    public static Dictionary<string, JsonElement> Arguments(params (string Name, string Value)[] values)
+    {
+        Dictionary<string, JsonElement> arguments = [with(StringComparer.Ordinal)];
+
+        foreach ((string name, string value) in values)
+        {
+            arguments[name] = JsonSerializer.SerializeToElement(
+                value: value,
+                jsonTypeInfo: TestJsonContext.Default.String
+            );
+        }
+
+        return arguments;
     }
 }

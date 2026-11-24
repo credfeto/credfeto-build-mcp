@@ -41,7 +41,7 @@ public sealed class SelfTestTests : TestBase
         PythonWorkspace workspace = provider.GetRequiredService<PythonWorkspace>();
 
         Assert.Equal(
-            expected: ["detect"],
+            expected: ["detect", "job_result", "job_status", "lint", "restore", "test"],
             actual: workspace.Tools.Select(static tool => tool.ProtocolTool.Name),
             comparer: StringComparer.Ordinal
         );

@@ -42,4 +42,20 @@ internal static class PythonRepositories
     {
         _ = await repository.WriteAsync(relative: relative, content: content, cancellationToken: cancellationToken);
     }
+
+    // A git repository that ignores .venv, as the template's .gitignore does
+    public static async ValueTask InitGitAsync(TemporaryDirectory repository, CancellationToken cancellationToken)
+    {
+        await TestGit.RunAsync(
+            repository: repository.Path,
+            arguments: ["init", "--quiet"],
+            cancellationToken: cancellationToken
+        );
+        await WriteAsync(
+            repository: repository,
+            relative: ".gitignore",
+            content: ".venv/\n",
+            cancellationToken: cancellationToken
+        );
+    }
 }

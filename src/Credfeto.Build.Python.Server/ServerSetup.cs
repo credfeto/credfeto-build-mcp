@@ -5,6 +5,7 @@ using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Python.Server.Commands;
 using Credfeto.Build.Python.Server.Detection;
 using Credfeto.Build.Python.Server.Workspace;
+using Credfeto.Build.Server.Commands;
 using Credfeto.Build.Server.Workspace;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -37,9 +38,11 @@ public static class ServerSetup
         return services
             .AddBuildCore(environment)
             .AddSingleton(python)
+            .AddSingleton<ICommandRunner, ProcessCommandRunner>()
             .AddSingleton(provider => new PythonWorkspace(
                 initial: detection,
                 runner: provider.GetRequiredService<IJobRunner>(),
+                commands: provider.GetRequiredService<ICommandRunner>(),
                 python: provider.GetRequiredService<PythonLocator>()
             ))
             .AddSingleton(provider => new RepositoryWatcher(
