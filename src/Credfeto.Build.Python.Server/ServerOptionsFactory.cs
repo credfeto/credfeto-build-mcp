@@ -23,16 +23,16 @@ public static class ServerOptionsFactory
     {
         if (detection.Repository is not null)
         {
-            return "Detects the Python projects in "
+            return "Restores, tests and lints the Python projects in "
                 + detection.RepositoryRoot
-                + " (pip with a virtual environment, or uv when uv.lock exists), instead of raw pip, uv, pytest or coverage commands. The repository is detected afresh on every call. The tool list follows the repository: when projects change the server sends notifications/tools/list_changed.";
+                + " (pip with a per-project .venv, or uv when uv.lock exists), instead of raw pip, uv, pytest, flake8 or pylint commands. Every tool except detect, job_status and job_result starts a job and returns its id at once: call job_result, which waits for the job to finish, and call it again only while its state is still running. job_status is a single look at progress; never call it in a loop. One job runs at a time. Read the notes a tool returns: they say when pytest or coverage was installed because the project does not declare them. The tool list follows the repository: when projects change the server sends notifications/tools/list_changed.";
         }
 
         if (detection.TestSuite is not null)
         {
             return "There are Python test files in "
                 + detection.RepositoryRoot
-                + " but no pyproject.toml or requirements*.txt declaring what they need, so this server offers only detect for now, which lists where the tests are. It watches the repository and offers its tools, with notifications/tools/list_changed, once a manifest appears.";
+                + " but no pyproject.toml or requirements*.txt declaring what they need. Call restore: it creates a minimal pyproject.toml (or requirements-dev.txt) at the repository root and installs from it; commit the file and add anything missing. The server then offers its other tools, with notifications/tools/list_changed.";
         }
 
         return "No supported Python project was found in "

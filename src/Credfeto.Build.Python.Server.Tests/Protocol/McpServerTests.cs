@@ -20,7 +20,7 @@ namespace Credfeto.Build.Python.Server.Tests.Protocol;
 
 public sealed class McpServerTests : TestBase
 {
-    private static readonly string[] AllTools = ["detect"];
+    private static readonly string[] AllTools = ["detect", "job_result", "job_status", "lint", "restore", "test"];
 
     [Fact]
     public async Task APythonProjectAdvertisesItsToolsAsync()
@@ -34,7 +34,7 @@ public sealed class McpServerTests : TestBase
         Assert.True(condition: result.AdvertisesTools, userMessage: "the tools capability is advertised");
         Assert.True(condition: result.AdvertisesListChanged, userMessage: "tools.listChanged is advertised");
         Assert.Contains(
-            expectedSubstring: "Python projects in",
+            expectedSubstring: "the Python projects in",
             actualString: result.Instructions,
             comparisonType: StringComparison.Ordinal
         );
@@ -72,7 +72,11 @@ public sealed class McpServerTests : TestBase
 
         McpProbeResult result = await this.ProbeAsync(repository);
 
-        Assert.Equal(expected: ["detect"], actual: result.ToolNames, comparer: StringComparer.Ordinal);
+        Assert.Equal(
+            expected: ["detect", "job_result", "job_status", "restore"],
+            actual: result.ToolNames,
+            comparer: StringComparer.Ordinal
+        );
         Assert.Contains(
             expectedSubstring: "There are Python test files in",
             actualString: result.Instructions,

@@ -3,22 +3,31 @@ using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Python.Server.Commands;
 using Credfeto.Build.Python.Server.Detection;
+using Credfeto.Build.Server.Commands;
 using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Python.Server.Tools;
 
 public sealed class ToolContext
 {
-    public ToolContext(IPythonDetectionSource detection, IJobRunner runner, PythonLocator python)
+    public ToolContext(
+        IPythonDetectionSource detection,
+        IJobRunner runner,
+        ICommandRunner commands,
+        PythonLocator python
+    )
     {
         this.Detection = detection;
         this.Runner = runner;
+        this.Commands = commands;
         this.Python = python;
     }
 
     public IPythonDetectionSource Detection { get; }
 
     public IJobRunner Runner { get; }
+
+    public ICommandRunner Commands { get; }
 
     public PythonLocator Python { get; }
 
