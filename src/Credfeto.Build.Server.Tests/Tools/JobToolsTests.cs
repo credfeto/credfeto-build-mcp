@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Core.Coverage;
 using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Server.Tests.Helpers;
 using Credfeto.Build.Server.Tools;
@@ -253,6 +254,30 @@ public sealed class JobToolsTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task JobStarterPassesTheReportAndTheComponentItIsLimitedToAsync()
+    {
+        _ = await JobStarter.StartAsync(
+            runner: this._runner,
+            repositoryRoot: this._repository.Path,
+            timeout: TimeSpan.FromMinutes(7),
+            kind: "coverage",
+            steps: [],
+            testParser: null,
+            coverage: new(Files: [], ReportPath: "/repo/COVERAGE.md", Language: CoverageLanguage.Node, Components: null)
+            {
+                ReportComponent = "web",
+            },
+            changedFiles: null,
+            cancellationToken: this.CancellationToken()
+        );
+
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(expected: "/repo/COVERAGE.md", actual: definition.CoverageReportPath);
+        Assert.Equal(expected: "web", actual: definition.CoverageReportComponent);
+        Assert.Same(expected: CoverageLanguage.Node, actual: definition.CoverageLanguage);
+    }
+
+    [Fact]
     public async Task JobStarterStartsTheJobWithTheRepositorysTimeoutAsync()
     {
         string started = await JobStarter.StartAsync(
@@ -320,7 +345,8 @@ public sealed class JobToolsTests : TestBase, IDisposable
             HeadSha: null,
             Message: null,
             ChangedFiles: null,
-            CoverageReportPath: null
+            CoverageReportPath: null,
+            CoverageReportNote: null
         );
     }
 

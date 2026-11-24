@@ -94,7 +94,7 @@ The `buildtest` properties that `build` and `test` pass are `-p:ApiCompatGenerat
 | `buildcheck` | `mode`: `pre_release` (default) or `release` | Starts `dotnet tool restore`, then `dotnet buildcheck -Solution <absolute solution> -WarningAsErrors true -PreReleaseBuild <true\|false>`. |
 | `buildtest` | none | Starts the installed pre-commit `buildtest` script, with no arguments, from the repository root. |
 | `cleanup` | `scope`: `changed` (default) or `all` | Starts `dotnet tool restore`, then `dotnet cscleanup <files>` (in batches of 200). `changed` is the `.cs` files changed against the merge-base with the default branch, committed or not, untracked included; `all` is every tracked `.cs` file. `job_result` lists the files it changed in `changedFiles`. |
-| `coverage` | `project`: `all` (default) or one of the unit test projects | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. A successful run of `all` always updates the `## .NET` section of `COVERAGE.md` at the repository root and `job_result` gives the file's path in `coverageReportPath`; a single-project run never writes it. |
+| `coverage` | `project`: `all` (default) or one of the unit test projects | Starts the coverage run below for each chosen unit test project, one at a time, then combines the results. A successful run of `all` always rewrites the `## .NET` section of `COVERAGE.md` at the repository root; a single-project run replaces only its assembly's row and sums Overall again (see Coverage below). `job_result` gives the file's path in `coverageReportPath`. |
 | `detect` | none | The solution, its projects, the unit, integration and benchmark test projects, the timeout and any overrides error, detected afresh. |
 | `job_result` | `id`; `wait_seconds`: 0 to 600, default 240 | Waits up to `wait_seconds` for the job to finish, then returns the outcome: state, each step's exit code, test counts, failing test names, coverage, changed files, the masked last 40 lines of output, and the log path. `0` answers at once. |
 | `job_status` | `id` | A single, instant look at whether the job is still running, how long it has run and which step it is on. |
@@ -161,14 +161,36 @@ any report hit it. Each test project's coverage is already limited
 to its own assembly by `UnitTests.props`, so an assembly is measured only by its own tests.
 
 A run of every unit test project (`project` `all`) always writes `COVERAGE.md` at the repository root once it
-succeeds; there is no option to skip it. Only the `## .NET` section (each project to one decimal place, then `**Overall (.NET)**`) and the
+succeeds; there is no option to skip it. Only the `## .NET` section and the
 `Captured at commit` line, which names the measured head SHA and the date, are replaced; every other section is kept
 byte for byte. A missing `.NET` section is inserted before the other language sections (the order is .NET, Node,
 Python, Shell). A missing file is created with just the `.NET` section and that line. The update holds an exclusive
 lock on the file from the read to the write, so another build server writing its own section at the same moment
 waits rather than losing either section. Nothing is written when a test
 run fails, a coverage file is missing or unreadable, or the head SHA cannot be read; `coverageErrors` then says why.
-A single-project run never writes the file, since one project's figures are not the repository's Overall.
+
+Each row records the covered and coverable line counts after the percentage (one decimal place), and the Overall row
+is the sum of the rows' counts. The percentage stays in the second column, where the coverage ratchet reads it:
+
+```text
+## .NET
+
+| Project | Line Coverage | Covered | Coverable |
+| --- | --- | --- | --- |
+| Credfeto.Foo | 82.1% | 1234 | 1503 |
+| Credfeto.Bar | 0.0% | 0 | 0 |
+| **Overall (.NET)** | **82.1%** | **1234** | **1503** |
+```
+
+A component with no coverable lines is `0.0%` with counts of 0, and an `n/a` row with no counts counts as 0 of 0.
+
+A single-project run updates `COVERAGE.md` too, under the same lock: it replaces only the row of the project's
+assembly (adding it in order if it is new) and sums Overall again from every row's counts, so the section matches what
+a run of `all` gives for the same code (each test project measures only its own assembly). `coverageReportNote` in
+`job_result` says what it did. When another row has no counts (a file written before they were recorded), Overall is
+left as it was and `coverageReportNote` names those rows; the next run of `all` fills them in. A single-project run
+never creates the file or a missing `.NET` table, and writes nothing when its run did not measure its assembly;
+`coverageErrors` says why.
 
 ### Per-repository overrides
 
@@ -333,7 +355,7 @@ watched directory, or by the next `detect` call, which always detects afresh.
 | --- | --- | --- |
 | `add_package` | `package_id`, `version` (optional), `dev`, `package` | `npm install <id>@<version>` into one package's `package.json` (`--save-dev` with `dev`), then lists the version installed. |
 | `build` | `package` | `npm run build`; offered only when some package has a `build` script. |
-| `coverage` | `package` | Runs the package's own coverage script and reads the Cobertura report it writes; offered only when some package has a `test:coverage` script, or the script `node.coverageScript` names. With `package` `all`, a successful run always writes the `## Node` section of `COVERAGE.md`. See Node coverage below. |
+| `coverage` | `package` | Runs the package's own coverage script and reads the Cobertura report it writes; offered only when some package has a `test:coverage` script, or the script `node.coverageScript` names. With `package` `all`, a successful run always writes the `## Node` section of `COVERAGE.md`; a single-package run replaces only its own row. See Node coverage below. |
 | `detect` | none | Lists the install roots and their lock files, the packages with their directories, install roots, scripts and test runners, the timeout and any overrides error, as they are now. |
 | `job_result`, `job_status` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
 | `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
@@ -374,8 +396,11 @@ no coverage tool.
 - **`COVERAGE.md`:** a successful run of every package (`package` `all`) always replaces the `## Node` section and the commit line of
   `COVERAGE.md` at the repository root, with one decimal place and the same table as the `.NET` section, and leaves
   every other section as it is. It is not written when a run fails, a report is missing or unreadable, or the head
-  SHA cannot be read; `coverageErrors` says why. A single-package run never writes it, and there is no option to skip
-  the report.
+  SHA cannot be read; `coverageErrors` says why. There is no option to skip the report. Rows carry covered and
+  coverable line counts, as in the `.NET` section.
+- **One package:** a single-package run replaces only that package's row of the `## Node` table and sums
+  Overall (Node) again from every row's counts, exactly as a single-project .NET run does (including leaving Overall
+  unchanged, and saying why in `coverageReportNote`, when a row has no counts).
 
 ### Installing and running the Node server
 

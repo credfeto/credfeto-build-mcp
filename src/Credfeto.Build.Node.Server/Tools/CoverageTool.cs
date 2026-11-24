@@ -36,7 +36,7 @@ public sealed class CoverageTool : BuildTool
             title: "Measure npm line coverage",
             description: "Starts a job that runs the coverage script of the package chosen in package (test:coverage, or node.coverageScript in .ai/commands.json) with CI=true, installing first when node_modules is missing or older than the lock file, then reads the Cobertura report the script writes ("
                 + CoverageScripts.DEFAULT_FILE
-                + " in the package's directory, or node.coverageFile) and reports line coverage per package and Overall. The script must enable Vitest's cobertura reporter; nothing is added to it. With package all, a successful run always writes its figures into the Node section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-package run never touches COVERAGE.md. Returns the job id at once; call job_result to wait for its outcome",
+                + " in the package's directory, or node.coverageFile) and reports line coverage per package and Overall. The script must enable Vitest's cobertura reporter; nothing is added to it. With package all, a successful run always writes its figures into the Node section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-package run replaces only that package's row and sums Overall (Node) again from every row's line counts, leaving Overall unchanged when a row has no counts. Returns the job id at once; call job_result to wait for its outcome",
             schema: [package],
             readOnly: false
         )
@@ -77,7 +77,10 @@ public sealed class CoverageTool : BuildTool
         DeleteStaleReports(components.Keys);
 
         // A run of every package always records its figures in COVERAGE.md (the repository owner's rule: there is no
-        // option not to). One package's figures are not the repository's Overall, so a single-package run never writes it
+        // option not to). A single-package run replaces only its package's row and sums Overall again from the rows'
+        // line counts
+        bool all = StringComparer.Ordinal.Equals(x: choice, y: ScriptTargets.ALL);
+
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
             repositoryRoot: repository.RepositoryRoot,
@@ -87,12 +90,13 @@ public sealed class CoverageTool : BuildTool
             testParser: CompositeTestOutputParser.For(targets.Select(static target => target.Package.TestRunner)),
             coverage: new(
                 Files: [.. components.Keys],
-                ReportPath: StringComparer.Ordinal.Equals(x: choice, y: ScriptTargets.ALL)
-                    ? Path.Combine(path1: repository.RepositoryRoot, path2: CoverageFile.FILE_NAME)
-                    : null,
+                ReportPath: Path.Combine(path1: repository.RepositoryRoot, path2: CoverageFile.FILE_NAME),
                 Language: CoverageLanguage.Node,
                 Components: components
-            ),
+            )
+            {
+                ReportComponent = all || targets.Count == 0 ? null : targets[0].Package.Name,
+            },
             changedFiles: null,
             cancellationToken: cancellationToken
         );

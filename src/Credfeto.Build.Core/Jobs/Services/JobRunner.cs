@@ -392,22 +392,112 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
 
         try
         {
+            if (job.Definition.CoverageReportComponent is { } component)
+            {
+                await this.UpdateCoverageRowAsync(
+                    job: job,
+                    path: path,
+                    component: component,
+                    measured: measured,
+                    headSha: headSha,
+                    cancellationToken: cancellationToken
+                );
+
+                return;
+            }
+
             CoverageLanguage language = job.Definition.CoverageLanguage;
             await CoverageFile.WriteSectionAsync(
                 path: path,
                 language: language,
                 section: CoverageMarkdown.FormatSection(summary: measured, language: language),
                 headSha: headSha,
-                capturedOn: DateOnly.FromDateTime(this._timeProvider.GetUtcNow().UtcDateTime),
+                capturedOn: this.CapturedOn(),
                 timeProvider: this._timeProvider,
                 cancellationToken: cancellationToken
             );
-            job.SetCoverageReport(path);
+            job.SetCoverageReport(path: path, note: null);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             job.AddCoverageError(CoverageFile.FILE_NAME + " could not be written: " + exception.Message);
         }
+    }
+
+    // A run of one project or package replaces only its own row, and sums Overall again only when every row has its
+    // line counts; the job result says what was done and why
+    private async ValueTask UpdateCoverageRowAsync(
+        RunningJob job,
+        string path,
+        string component,
+        CoverageSummary measured,
+        string headSha,
+        CancellationToken cancellationToken
+    )
+    {
+        CoverageLanguage language = job.Definition.CoverageLanguage;
+        AssemblyCoverage? row = measured.Assemblies.FirstOrDefault(assembly =>
+            StringComparer.Ordinal.Equals(x: assembly.Name, y: component)
+        );
+
+        if (row is null)
+        {
+            NotWritten(job: job, reason: "the run measured no lines of " + component);
+
+            return;
+        }
+
+        CoverageRowUpdate update = await CoverageFile.UpdateRowAsync(
+            path: path,
+            language: language,
+            row: CoverageRow.Measured(name: row.Name, covered: row.LinesCovered, coverable: row.LinesValid),
+            headSha: headSha,
+            capturedOn: this.CapturedOn(),
+            timeProvider: this._timeProvider,
+            cancellationToken: cancellationToken
+        );
+
+        if (RowNote(update: update, component: component, language: language) is { } note)
+        {
+            job.SetCoverageReport(path: path, note: note);
+
+            return;
+        }
+
+        NotWritten(
+            job: job,
+            reason: "it has no "
+                + language.Heading
+                + " coverage table to update a row of; a full coverage run writes the whole section"
+        );
+    }
+
+    // What a row update did, or null when it wrote nothing
+    private static string? RowNote(CoverageRowUpdate update, string component, CoverageLanguage language)
+    {
+        return update.Outcome switch
+        {
+            CoverageRowOutcome.OverallRecomputed => "Updated the "
+                + component
+                + " row and recomputed "
+                + language.OverallLabel
+                + " from the line counts of every row",
+            CoverageRowOutcome.OverallUnchanged => "Updated the "
+                + component
+                + " row but left "
+                + language.OverallLabel
+                + " unchanged, because these rows have no line counts to sum (they were written before "
+                + CoverageFile.FILE_NAME
+                + " recorded them): "
+                + string.Join(separator: ", ", values: update.RowsWithoutCounts)
+                + ". The next full coverage run fills them in",
+            _ => null,
+        };
+    }
+
+    private DateOnly CapturedOn()
+    {
+        return DateOnly.FromDateTime(this._timeProvider.GetUtcNow().UtcDateTime);
     }
 
     private static void NotWritten(RunningJob job, string reason)
