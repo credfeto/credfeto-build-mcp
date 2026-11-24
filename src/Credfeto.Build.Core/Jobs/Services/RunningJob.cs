@@ -21,6 +21,7 @@ internal sealed class RunningJob : IAsyncDisposable
     private string? _message;
     private IReadOnlyList<string>? _changedFiles;
     private string? _coverageReportPath;
+    private string? _coverageReportNote;
     private TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public RunningJob(
@@ -132,11 +133,12 @@ internal sealed class RunningJob : IAsyncDisposable
         }
     }
 
-    public void SetCoverageReport(string path)
+    public void SetCoverageReport(string path, string? note)
     {
         lock (this._lock)
         {
             this._coverageReportPath = path;
+            this._coverageReportNote = note;
         }
     }
 
@@ -211,7 +213,8 @@ internal sealed class RunningJob : IAsyncDisposable
                 HeadSha: this.Definition.HeadSha,
                 Message: this._message,
                 ChangedFiles: this._changedFiles,
-                CoverageReportPath: this._coverageReportPath
+                CoverageReportPath: this._coverageReportPath,
+                CoverageReportNote: this._coverageReportNote
             );
         }
     }

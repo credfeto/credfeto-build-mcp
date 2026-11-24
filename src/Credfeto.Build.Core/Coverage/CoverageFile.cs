@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,24 +37,12 @@ public static class CoverageFile
     {
         await using FileStream stream = await OpenExclusiveAsync(
             path: path,
+            mode: FileMode.OpenOrCreate,
             timeProvider: timeProvider,
             cancellationToken: cancellationToken
         );
 
-        string existing;
-
-        using (
-            StreamReader reader = new(
-                stream: stream,
-                encoding: Utf8,
-                detectEncodingFromByteOrderMarks: true,
-                bufferSize: 4096,
-                leaveOpen: true
-            )
-        )
-        {
-            existing = await reader.ReadToEndAsync(cancellationToken);
-        }
+        string existing = await ReadAllAsync(stream: stream, cancellationToken: cancellationToken);
 
         string merged = Merge(
             existing: existing.Length == 0 ? null : existing,
@@ -62,13 +52,144 @@ public static class CoverageFile
             capturedOn: capturedOn
         );
 
+        await ReplaceContentAsync(stream: stream, text: merged, cancellationToken: cancellationToken);
+    }
+
+    // Replaces (or adds) one component's row of a language's table and sums Overall again from every row's line
+    // counts, under the same lock as WriteSectionAsync. Only a file that already has the language's table is changed:
+    // the other components' figures can only come from it
+    public static async ValueTask<CoverageRowUpdate> UpdateRowAsync(
+        string path,
+        CoverageLanguage language,
+        CoverageRow row,
+        string headSha,
+        DateOnly capturedOn,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken
+    )
+    {
+        FileStream stream;
+
+        try
+        {
+            stream = await OpenExclusiveAsync(
+                path: path,
+                mode: FileMode.Open,
+                timeProvider: timeProvider,
+                cancellationToken: cancellationToken
+            );
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return CoverageRowUpdate.NoTable;
+        }
+
+        await using (stream)
+        {
+            string existing = await ReadAllAsync(stream: stream, cancellationToken: cancellationToken);
+            CoverageRowUpdate update = UpdateRow(
+                existing: existing,
+                language: language,
+                row: row,
+                headSha: headSha,
+                capturedOn: capturedOn
+            );
+
+            if (update.Text is { } text)
+            {
+                await ReplaceContentAsync(stream: stream, text: text, cancellationToken: cancellationToken);
+            }
+
+            return update;
+        }
+    }
+
+    public static CoverageRowUpdate UpdateRow(
+        string existing,
+        CoverageLanguage language,
+        CoverageRow row,
+        string headSha,
+        DateOnly capturedOn
+    )
+    {
+        if (
+            FindSection(text: existing, language: language) is not { } section
+            || !CoverageTable.TryParse(
+                section: section,
+                rows: out IReadOnlyList<CoverageRow> rows,
+                overall: out CoverageRow? overall
+            )
+        )
+        {
+            return CoverageRowUpdate.NoTable;
+        }
+
+        // Ordered as a full run orders its rows, so either run writes the same table for the same figures
+        CoverageRow[] updated =
+        [
+            .. rows.Where(existingRow => !StringComparer.Ordinal.Equals(x: existingRow.Name, y: row.Name))
+                .Append(row)
+                .OrderBy(keySelector: static component => component.Name, comparer: StringComparer.Ordinal),
+        ];
+        string[] withoutCounts =
+        [
+            .. updated.Where(static component => !component.HasCounts).Select(static component => component.Name),
+        ];
+
+        // A row with no counts cannot be summed, so Overall is kept as it was rather than guessed
+        CoverageRow total =
+            withoutCounts.Length == 0
+                ? CoverageRow.Measured(
+                    name: language.OverallLabel,
+                    covered: updated.Sum(static component => component.Covered ?? 0),
+                    coverable: updated.Sum(static component => component.Coverable ?? 0)
+                )
+                : overall;
+
+        string text = Merge(
+            existing: existing,
+            language: language,
+            section: CoverageTable.Render(language: language, rows: updated, overall: total),
+            headSha: headSha,
+            capturedOn: capturedOn
+        );
+
+        return new(
+            Outcome: withoutCounts.Length == 0
+                ? CoverageRowOutcome.OverallRecomputed
+                : CoverageRowOutcome.OverallUnchanged,
+            RowsWithoutCounts: withoutCounts,
+            Text: text
+        );
+    }
+
+    private static async ValueTask<string> ReadAllAsync(FileStream stream, CancellationToken cancellationToken)
+    {
+        using StreamReader reader = new(
+            stream: stream,
+            encoding: Utf8,
+            detectEncodingFromByteOrderMarks: true,
+            bufferSize: 4096,
+            leaveOpen: true
+        );
+
+        return await reader.ReadToEndAsync(cancellationToken);
+    }
+
+    private static async ValueTask ReplaceContentAsync(
+        FileStream stream,
+        string text,
+        CancellationToken cancellationToken
+    )
+    {
         stream.SetLength(0);
-        await stream.WriteAsync(buffer: Utf8.GetBytes(merged), cancellationToken: cancellationToken);
+        await stream.WriteAsync(buffer: Utf8.GetBytes(text), cancellationToken: cancellationToken);
         await stream.FlushAsync(cancellationToken);
     }
 
     private static async ValueTask<FileStream> OpenExclusiveAsync(
         string path,
+        FileMode mode,
         TimeProvider timeProvider,
         CancellationToken cancellationToken
     )
@@ -81,7 +202,7 @@ public static class CoverageFile
             {
                 return new(
                     path: path,
-                    mode: FileMode.OpenOrCreate,
+                    mode: mode,
                     access: FileAccess.ReadWrite,
                     share: FileShare.None,
                     bufferSize: 4096,
@@ -141,16 +262,11 @@ public static class CoverageFile
 
     private static string ReplaceSection(string existing, CoverageLanguage language, string section, string newLine)
     {
-        string heading = HEADING_PREFIX + language.Heading;
-        int start = FindLine(text: existing, from: 0, predicate: line =>
-            StringComparer.Ordinal.Equals(x: line.TrimEnd(), y: heading)
-        );
+        (int start, int end) = SectionBounds(text: existing, language: language);
 
         if (start >= 0)
         {
             // The section runs to the next heading or the footer rule, and only that range is replaced
-            int end = FindLine(text: existing, from: NextLine(text: existing, start: start), predicate: IsBoundary);
-
             return end < 0 ? existing[..start] + section : existing[..start] + section + newLine + existing[end..];
         }
 
@@ -163,6 +279,32 @@ public static class CoverageFile
         return insertAt < 0
             ? WithTrailingNewLine(text: existing, newLine: newLine) + newLine + section
             : existing[..insertAt] + section + newLine + existing[insertAt..];
+    }
+
+    private static string? FindSection(string text, CoverageLanguage language)
+    {
+        (int start, int end) = SectionBounds(text: text, language: language);
+
+        if (start < 0)
+        {
+            return null;
+        }
+
+        return end < 0 ? text[start..] : text[start..end];
+    }
+
+    // Where a language's section starts (its heading) and ends (the next heading or the footer rule, or -1 at the end
+    // of the file); the start is -1 when the file has no such section
+    private static (int Start, int End) SectionBounds(string text, CoverageLanguage language)
+    {
+        string heading = HEADING_PREFIX + language.Heading;
+        int start = FindLine(text: text, from: 0, predicate: line =>
+            StringComparer.Ordinal.Equals(x: line.TrimEnd(), y: heading)
+        );
+
+        return start < 0
+            ? (-1, -1)
+            : (start, FindLine(text: text, from: NextLine(text: text, start: start), predicate: IsBoundary));
     }
 
     // Where the search for a new section's place starts: just after the heading of the last section the documented

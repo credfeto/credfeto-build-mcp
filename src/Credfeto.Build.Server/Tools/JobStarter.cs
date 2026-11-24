@@ -98,6 +98,7 @@ public static class JobStarter
         {
             ChangedFiles = changedFiles,
             CoverageReportPath = coverage.ReportPath,
+            CoverageReportComponent = coverage.ReportComponent,
             CoverageLanguage = coverage.Language,
             CoverageComponents = coverage.Components,
         };

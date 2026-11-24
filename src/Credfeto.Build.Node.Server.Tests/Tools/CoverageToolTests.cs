@@ -169,14 +169,13 @@ public sealed class CoverageToolTests : TestBase, IDisposable
         );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
-        Assert.Equal(
-            expected: this.InRepository(CoverageFile.FILE_NAME),
-            actual: Assert.Single(this._runner.Started).CoverageReportPath
-        );
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(expected: this.InRepository(CoverageFile.FILE_NAME), actual: definition.CoverageReportPath);
+        Assert.Null(definition.CoverageReportComponent);
     }
 
     [Fact]
-    public async Task CoverageOfOnePackageNeverWritesCoverageMarkdownAsync()
+    public async Task CoverageOfOnePackageUpdatesOnlyItsRowAsync()
     {
         CallToolResult result = await this.CallAsync(
             repository: this.Workspace(coverageScript: null, coverageFile: null, rootScripts: []),
@@ -184,7 +183,9 @@ public sealed class CoverageToolTests : TestBase, IDisposable
         );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
-        Assert.Null(Assert.Single(this._runner.Started).CoverageReportPath);
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(expected: this.InRepository(CoverageFile.FILE_NAME), actual: definition.CoverageReportPath);
+        Assert.Equal(expected: WEB, actual: definition.CoverageReportComponent);
     }
 
     [Fact]

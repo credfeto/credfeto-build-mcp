@@ -15,6 +15,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Changed
 - MCP tools/list now returns tools sorted by name (case-insensitive ordinal order) on both the .NET and Node servers, so clients get a stable, predictable tool list - #49
 - The .NET and Node `coverage` tools always write `COVERAGE.md` from a successful full run (`project`/`package` `all`); the opt-in report argument is removed, so there is no option to skip the report. A single-project or single-package run never writes it - #51
+- `COVERAGE.md` rows record covered and coverable line counts after the percentage (`| Project | Line Coverage | Covered | Coverable |`), with Overall the sum of the rows. A single-project (.NET) or single-package (Node) coverage run now replaces only its own row and recomputes Overall from the counts; when a row has no counts (a file written before this change) Overall is left unchanged and `job_result`'s `coverageReportNote` says why - #52
 ### Deprecated
 ### Removed
 ### Deployment Changes

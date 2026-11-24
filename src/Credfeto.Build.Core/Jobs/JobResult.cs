@@ -21,5 +21,6 @@ public sealed record JobResult(
     string? HeadSha,
     string? Message,
     IReadOnlyList<string>? ChangedFiles,
-    string? CoverageReportPath
+    string? CoverageReportPath,
+    string? CoverageReportNote
 );
