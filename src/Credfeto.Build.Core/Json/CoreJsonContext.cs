@@ -7,6 +7,7 @@ namespace Credfeto.Build.Core.Json;
 
 [JsonSerializable(typeof(DotnetOverrides))]
 [JsonSerializable(typeof(NodeOverrides))]
+[JsonSerializable(typeof(PythonOverrides))]
 [JsonSerializable(typeof(JobStatus))]
 [JsonSerializable(typeof(JobResult))]
 [JsonSourceGenerationOptions(

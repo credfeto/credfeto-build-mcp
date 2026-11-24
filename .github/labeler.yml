@@ -24,6 +24,10 @@
   - any: ['src/Credfeto.Build.Node.Server/**/*']
 "credfeto-build-node-server-tests":
   - any: ['src/Credfeto.Build.Node.Server.Tests/**/*']
+"credfeto-build-python-server":
+  - any: ['src/Credfeto.Build.Python.Server/**/*']
+"credfeto-build-python-server-tests":
+  - any: ['src/Credfeto.Build.Python.Server.Tests/**/*']
 "credfeto-build-server":
   - any: ['src/Credfeto.Build.Server/**/*']
 "credfeto-build-server-tests":

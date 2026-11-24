@@ -112,12 +112,35 @@ public sealed class OverridesSectionTests : TestBase
     }
 
     [Fact]
-    public async Task APythonSectionIsLeftForThePythonServerAsync()
+    public async Task PythonSettingsAreReadAlongsideTheOtherSectionsAsync()
     {
         OverridesLoadResult result = await this.LoadAsync(
             """
             {
               "dotnet": { "timeoutMinutes": 45 },
+              "python": { "enabled": true, "projects": ["tools/scripts"], "timeoutMinutes": 15 },
+            }
+            """
+        );
+
+        Assert.Null(result.DotnetErrors);
+        Assert.Null(result.PythonErrors);
+        Assert.Equal(expected: 45, actual: result.Overrides.Dotnet?.TimeoutMinutes);
+        PythonOverrides? python = result.Overrides.Python;
+        Assert.NotNull(python);
+        Assert.True(condition: python.Enabled, userMessage: "enabled was read");
+        Assert.Equal(expected: ["tools/scripts"], actual: python.Projects, comparer: StringComparer.Ordinal);
+        Assert.Equal(expected: 15, actual: python.TimeoutMinutes);
+    }
+
+    [Fact]
+    public async Task APythonSectionThatIsNotValidOnlyCostsPythonItsSettingsAsync()
+    {
+        OverridesLoadResult result = await this.LoadAsync(
+            """
+            {
+              "dotnet": { "timeoutMinutes": 45 },
+              "node": { "enabled": false },
               "python": { "anything": ["the", "python", "server", "reads"] },
             }
             """
@@ -126,16 +149,23 @@ public sealed class OverridesSectionTests : TestBase
         Assert.Null(result.DotnetErrors);
         Assert.Null(result.NodeErrors);
         Assert.Equal(expected: 45, actual: result.Overrides.Dotnet?.TimeoutMinutes);
+        Assert.False(condition: result.Overrides.Node?.Enabled, userMessage: "the node section was still read");
+        Assert.Null(result.Overrides.Python);
+        Assert.Equal(
+            expected: ".ai/commands.json: the python section is not valid (line 4) and was ignored",
+            actual: result.PythonErrors
+        );
     }
 
     [Fact]
     public async Task ANullSectionMeansNoSettingsAndNoErrorAsync()
     {
-        OverridesLoadResult result = await this.LoadAsync("""{ "dotnet": null, "node": null }""");
+        OverridesLoadResult result = await this.LoadAsync("""{ "dotnet": null, "node": null, "python": null }""");
 
         Assert.Same(expected: RepositoryOverrides.None, actual: result.Overrides);
         Assert.Null(result.DotnetErrors);
         Assert.Null(result.NodeErrors);
+        Assert.Null(result.PythonErrors);
     }
 
     [Theory]
@@ -151,6 +181,7 @@ public sealed class OverridesSectionTests : TestBase
         Assert.NotNull(result.Error);
         Assert.Null(result.NodeError);
         Assert.Null(result.DotnetError);
+        Assert.Null(result.PythonError);
     }
 
     private async ValueTask<OverridesLoadResult> LoadAsync(string content)
