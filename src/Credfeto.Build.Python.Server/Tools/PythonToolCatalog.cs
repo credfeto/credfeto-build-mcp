@@ -35,6 +35,7 @@ public static class PythonToolCatalog
             new RestoreTool(repository: repository, context: context),
             new TestTool(repository: repository, context: context),
             new LintTool(repository: repository, context: context),
+            new CoverageTool(repository: repository, context: context),
             new JobStatusTool(context.Runner),
             new JobResultTool(context.Runner),
         ];

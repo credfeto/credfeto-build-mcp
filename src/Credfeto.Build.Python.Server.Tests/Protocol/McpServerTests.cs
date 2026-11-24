@@ -20,7 +20,16 @@ namespace Credfeto.Build.Python.Server.Tests.Protocol;
 
 public sealed class McpServerTests : TestBase
 {
-    private static readonly string[] AllTools = ["detect", "job_result", "job_status", "lint", "restore", "test"];
+    private static readonly string[] AllTools =
+    [
+        "coverage",
+        "detect",
+        "job_result",
+        "job_status",
+        "lint",
+        "restore",
+        "test",
+    ];
 
     [Fact]
     public async Task APythonProjectAdvertisesItsToolsAsync()
