@@ -100,7 +100,7 @@ public sealed class CoverageAggregatorTests : TestBase
         );
 
         Assert.Equal(
-            expected: "## .NET\n\n| Project | Line Coverage |\n| --- | --- |\n| Example.Core | 80.0% |\n| Example.Other | 66.7% |\n| **Overall (.NET)** | **75.0%** |\n",
+            expected: "## .NET\n\n| Project | Line Coverage | Covered | Coverable |\n| --- | --- | --- | --- |\n| Example.Core | 80.0% | 4 | 5 |\n| Example.Other | 66.7% | 2 | 3 |\n| **Overall (.NET)** | **75.0%** | **6** | **8** |\n",
             actual: CoverageMarkdown.FormatSection(summary: summary, language: CoverageLanguage.Dotnet)
         );
     }
@@ -112,7 +112,7 @@ public sealed class CoverageAggregatorTests : TestBase
         CoverageSummary summary = new(Assemblies: [], Overall: new(CoverageAggregator.OVERALL, 50449, 100000, 50.45d));
 
         Assert.EndsWith(
-            expectedEndString: "| **Overall (.NET)** | **50.4%** |\n",
+            expectedEndString: "| **Overall (.NET)** | **50.4%** | **50449** | **100000** |\n",
             actualString: CoverageMarkdown.FormatSection(summary: summary, language: CoverageLanguage.Dotnet),
             comparisonType: System.StringComparison.Ordinal
         );
@@ -124,7 +124,7 @@ public sealed class CoverageAggregatorTests : TestBase
         CoverageSummary summary = new(Assemblies: [], Overall: new(CoverageAggregator.OVERALL, 0, 0, 0d));
 
         Assert.EndsWith(
-            expectedEndString: "| **Overall (.NET)** | **0.0%** |\n",
+            expectedEndString: "| **Overall (.NET)** | **0.0%** | **0** | **0** |\n",
             actualString: CoverageMarkdown.FormatSection(summary: summary, language: CoverageLanguage.Dotnet),
             comparisonType: System.StringComparison.Ordinal
         );

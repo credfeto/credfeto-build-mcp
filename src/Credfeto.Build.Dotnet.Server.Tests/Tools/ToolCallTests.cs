@@ -74,14 +74,13 @@ public sealed class ToolCallTests : TestBase, IDisposable
         );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
-        Assert.Equal(
-            expected: this._repository.Combine("COVERAGE.md"),
-            actual: Assert.Single(this._runner.Started).CoverageReportPath
-        );
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(expected: this._repository.Combine("COVERAGE.md"), actual: definition.CoverageReportPath);
+        Assert.Null(definition.CoverageReportComponent);
     }
 
     [Fact]
-    public async Task CoverageOfOneProjectNeverWritesTheRepositoryCoverageFileAsync()
+    public async Task CoverageOfOneProjectUpdatesOnlyItsAssemblysRowAsync()
     {
         CallToolResult result = await this.CallAsync(
             name: "coverage",
@@ -89,7 +88,9 @@ public sealed class ToolCallTests : TestBase, IDisposable
         );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
-        Assert.Null(Assert.Single(this._runner.Started).CoverageReportPath);
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(expected: this._repository.Combine("COVERAGE.md"), actual: definition.CoverageReportPath);
+        Assert.Equal(expected: "Example.Api", actual: definition.CoverageReportComponent);
     }
 
     [Fact]

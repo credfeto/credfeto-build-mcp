@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace Credfeto.Build.Core.Coverage;
@@ -28,34 +29,30 @@ public static class CoverageMarkdown
 
     public static string FormatSection(CoverageSummary summary, CoverageLanguage language)
     {
-        StringBuilder builder = new();
-        builder
-            .Append("## ")
-            .Append(language.Heading)
-            .Append("\n\n| ")
-            .Append(language.ComponentColumn)
-            .Append(" | Line Coverage |\n")
-            .Append("| --- | --- |\n");
-
-        foreach (AssemblyCoverage assembly in summary.Assemblies)
-        {
-            builder.Append("| ").Append(assembly.Name).Append(" | ").Append(OneDecimalPlace(assembly)).Append("% |\n");
-        }
-
-        builder
-            .Append("| **")
-            .Append(language.OverallLabel)
-            .Append("** | **")
-            .Append(OneDecimalPlace(summary.Overall))
-            .Append("%** |\n");
-
-        return builder.ToString();
+        return CoverageTable.Render(
+            language: language,
+            rows:
+            [
+                .. summary.Assemblies.Select(static assembly =>
+                    CoverageRow.Measured(
+                        name: assembly.Name,
+                        covered: assembly.LinesCovered,
+                        coverable: assembly.LinesValid
+                    )
+                ),
+            ],
+            overall: CoverageRow.Measured(
+                name: language.OverallLabel,
+                covered: summary.Overall.LinesCovered,
+                coverable: summary.Overall.LinesValid
+            )
+        );
     }
 
-    private static string OneDecimalPlace(AssemblyCoverage coverage)
+    // Rounded once from the line counts, so a figure already rounded to two places is never rounded twice
+    internal static string OneDecimalPlace(int covered, int coverable)
     {
-        // Rounded once from the line counts, so a figure already rounded to two places is never rounded twice
-        decimal percentage = coverage.LinesValid == 0 ? 0m : coverage.LinesCovered * 100m / coverage.LinesValid;
+        decimal percentage = coverable == 0 ? 0m : covered * 100m / coverable;
 
         return decimal.Round(d: percentage, decimals: 1, mode: MidpointRounding.AwayFromZero)
             .ToString(format: "0.0", provider: CultureInfo.InvariantCulture);

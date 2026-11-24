@@ -20,6 +20,10 @@ public sealed record JobDefinition(
 
     public string? CoverageReportPath { get; init; }
 
+    // When set, the report replaces only this component's row of the section and sums Overall again from the line
+    // counts of every row (a run of one project or package); when null, the run rewrites the whole section
+    public string? CoverageReportComponent { get; init; }
+
     // The COVERAGE.md section a coverage report replaces
     public CoverageLanguage CoverageLanguage { get; init; } = CoverageLanguage.Dotnet;
 

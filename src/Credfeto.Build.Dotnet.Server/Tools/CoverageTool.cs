@@ -26,7 +26,7 @@ public sealed class CoverageTool : BuildTool
         : base(
             name: ToolNames.COVERAGE,
             title: "Measure line coverage",
-            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. A successful run of all projects always writes its figures into the .NET section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-project run never touches COVERAGE.md. Returns the job id at once; call job_result to wait for its outcome",
+            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. A successful run of all projects always writes its figures into the .NET section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-project run replaces only its assembly's row and sums Overall (.NET) again from every row's line counts, leaving Overall unchanged when a row has no counts. Returns the job id at once; call job_result to wait for its outcome",
             schema: [project],
             readOnly: false
         )
@@ -60,7 +60,9 @@ public sealed class CoverageTool : BuildTool
         PrepareCoverageDirectory(repository: repository, coverageFiles: coverageFiles);
 
         // A full run always records its figures in COVERAGE.md (the repository owner's rule: there is no option not to).
-        // One project's figures are not the repository's Overall, so a single-project run never writes it
+        // A single-project run replaces only its assembly's row and sums Overall again from the rows' line counts
+        bool all = StringComparer.Ordinal.Equals(x: choice, y: ALL);
+
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
             repositoryRoot: repository.RepositoryRoot,
@@ -68,11 +70,18 @@ public sealed class CoverageTool : BuildTool
             kind: ToolNames.COVERAGE,
             steps: [.. projects.Select(project => DotnetCommands.Coverage(repository: repository, project: project))],
             testParser: new MtpTestOutputParser(),
-            coverageFiles: coverageFiles,
+            coverage: new(
+                Files: coverageFiles,
+                ReportPath: projects.Count != 0
+                    ? Path.Combine(path1: repository.RepositoryRoot, path2: CoverageFile.FILE_NAME)
+                    : null,
+                Language: CoverageLanguage.Dotnet,
+                Components: null
+            )
+            {
+                ReportComponent = all || projects.Count == 0 ? null : DotnetCommands.AssemblyUnderTest(projects[0]),
+            },
             changedFiles: null,
-            coverageReportPath: StringComparer.Ordinal.Equals(x: choice, y: ALL) && projects.Count != 0
-                ? Path.Combine(path1: repository.RepositoryRoot, path2: CoverageFile.FILE_NAME)
-                : null,
             cancellationToken: cancellationToken
         );
     }
