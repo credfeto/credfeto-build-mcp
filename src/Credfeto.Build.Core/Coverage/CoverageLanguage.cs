@@ -17,6 +17,9 @@ public sealed record CoverageLanguage(string Heading, string ComponentColumn, st
     public static CoverageLanguage Node { get; } =
         new(Heading: "Node", ComponentColumn: "Package", OverallLabel: "Overall (Node)");
 
+    public static CoverageLanguage Python { get; } =
+        new(Heading: "Python", ComponentColumn: "Package", OverallLabel: "Overall (Python)");
+
     // Where a section with this heading comes in the documented order; a heading the order does not list comes last
     public static int OrderOf(string heading)
     {

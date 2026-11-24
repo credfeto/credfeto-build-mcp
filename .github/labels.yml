@@ -68,6 +68,14 @@
   color: "0e8a16"
   description: "Changes in Credfeto.Build.Node.Server.Tests project"
 
+- name: "credfeto-build-python-server"
+  color: "96f7d2"
+  description: "Changes in Credfeto.Build.Python.Server project"
+
+- name: "credfeto-build-python-server-tests"
+  color: "0e8a16"
+  description: "Changes in Credfeto.Build.Python.Server.Tests project"
+
 - name: "credfeto-build-server"
   color: "96f7d2"
   description: "Changes in Credfeto.Build.Server project"

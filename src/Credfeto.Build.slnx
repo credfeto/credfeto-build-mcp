@@ -26,4 +26,8 @@
     <Project Path="Credfeto.Build.Node.Server.Tests/Credfeto.Build.Node.Server.Tests.csproj" />
     <Project Path="Credfeto.Build.Node.Server/Credfeto.Build.Node.Server.csproj" />
   </Folder>
+  <Folder Name="/Python/">
+    <Project Path="Credfeto.Build.Python.Server.Tests/Credfeto.Build.Python.Server.Tests.csproj" />
+    <Project Path="Credfeto.Build.Python.Server/Credfeto.Build.Python.Server.csproj" />
+  </Folder>
 </Solution>
