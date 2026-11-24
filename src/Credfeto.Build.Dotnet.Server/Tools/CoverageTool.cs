@@ -9,7 +9,6 @@ using Credfeto.Build.Dotnet.Server.Commands;
 using Credfeto.Build.Dotnet.Server.Detection;
 using Credfeto.Build.Dotnet.Server.Testing;
 using Credfeto.Build.Server.Tools;
-using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Dotnet.Server.Tools;
 
@@ -19,23 +18,21 @@ public sealed class CoverageTool : BuildTool
 
     private readonly ToolContext _context;
     private readonly SchemaProperty _project;
-    private readonly SchemaProperty _writeReport;
 
     public CoverageTool(DotnetRepository repository, ToolContext context)
-        : this(context: context, project: ProjectProperty(repository), writeReport: WriteReportProperty()) { }
+        : this(context: context, project: ProjectProperty(repository)) { }
 
-    private CoverageTool(ToolContext context, SchemaProperty project, SchemaProperty writeReport)
+    private CoverageTool(ToolContext context, SchemaProperty project)
         : base(
             name: ToolNames.COVERAGE,
             title: "Measure line coverage",
-            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. With write_report, a successful run of all projects also updates the .NET section and commit line of COVERAGE.md at the repository root, leaving every other section as it is. Returns the job id at once; call job_result to wait for its outcome",
-            schema: [project, writeReport],
+            description: "Starts a job that collects Cobertura coverage for one unit test project, or all of them one at a time, into coverage/<Assembly>.coverage.cobertura.xml, then reports per-assembly and Overall line coverage with the head SHA in COVERAGE.md shape. A successful run of all projects always writes its figures into the .NET section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-project run never touches COVERAGE.md. Returns the job id at once; call job_result to wait for its outcome",
+            schema: [project],
             readOnly: false
         )
     {
         this._context = context;
         this._project = project;
-        this._writeReport = writeReport;
     }
 
     protected override async ValueTask<string> ExecuteAsync(
@@ -49,15 +46,6 @@ public sealed class CoverageTool : BuildTool
             property: this._project,
             allowed: [ALL, .. UnitTestProjectChoice.Names(repository)]
         ) ?? ALL;
-        bool writeReport = arguments.GetFlag(this._writeReport);
-
-        // One project's figures are not the repository's Overall, so only a run of every project may be recorded
-        if (writeReport && !StringComparer.Ordinal.Equals(x: choice, y: ALL))
-        {
-            throw new ToolArgumentException(
-                "Invalid value for " + this._writeReport.Name + "; it needs project " + ALL
-            );
-        }
 
         IReadOnlyList<DotnetProject> projects = UnitTestProjectChoice.Select(
             repository: repository,
@@ -71,6 +59,8 @@ public sealed class CoverageTool : BuildTool
         ];
         PrepareCoverageDirectory(repository: repository, coverageFiles: coverageFiles);
 
+        // A full run always records its figures in COVERAGE.md (the repository owner's rule: there is no option not to).
+        // One project's figures are not the repository's Overall, so a single-project run never writes it
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
             repositoryRoot: repository.RepositoryRoot,
@@ -80,7 +70,7 @@ public sealed class CoverageTool : BuildTool
             testParser: new MtpTestOutputParser(),
             coverageFiles: coverageFiles,
             changedFiles: null,
-            coverageReportPath: writeReport && projects.Count != 0
+            coverageReportPath: StringComparer.Ordinal.Equals(x: choice, y: ALL) && projects.Count != 0
                 ? Path.Combine(path1: repository.RepositoryRoot, path2: CoverageFile.FILE_NAME)
                 : null,
             cancellationToken: cancellationToken
@@ -108,20 +98,5 @@ public sealed class CoverageTool : BuildTool
             DefaultValue: ALL,
             Required: false
         );
-    }
-
-    private static SchemaProperty WriteReportProperty()
-    {
-        return new(
-            Name: "write_report",
-            Description: "When true and project is all, a successful run writes its figures into COVERAGE.md at the repository root",
-            Values: null,
-            Pattern: null,
-            DefaultValue: SchemaProperty.FALSE,
-            Required: false
-        )
-        {
-            Flag = true,
-        };
     }
 }

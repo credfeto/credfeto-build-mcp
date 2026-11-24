@@ -9,7 +9,6 @@ using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Testing;
 using Credfeto.Build.Server.Tools;
-using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Node.Server.Tools;
 
@@ -19,7 +18,6 @@ public sealed class CoverageTool : BuildTool
 {
     private readonly ToolContext _context;
     private readonly SchemaProperty _package;
-    private readonly SchemaProperty _writeReport;
 
     public CoverageTool(NodeRepository repository, ToolContext context)
         : this(
@@ -29,24 +27,22 @@ public sealed class CoverageTool : BuildTool
                     CoverageScripts.For(package: package, overrideScript: repository.CoverageScript)
                 ),
                 description: "all, or the package whose coverage is measured"
-            ),
-            writeReport: WriteReportProperty()
+            )
         ) { }
 
-    private CoverageTool(ToolContext context, SchemaProperty package, SchemaProperty writeReport)
+    private CoverageTool(ToolContext context, SchemaProperty package)
         : base(
             name: ToolNames.COVERAGE,
             title: "Measure npm line coverage",
             description: "Starts a job that runs the coverage script of the package chosen in package (test:coverage, or node.coverageScript in .ai/commands.json) with CI=true, installing first when node_modules is missing or older than the lock file, then reads the Cobertura report the script writes ("
                 + CoverageScripts.DEFAULT_FILE
-                + " in the package's directory, or node.coverageFile) and reports line coverage per package and Overall. The script must enable Vitest's cobertura reporter; nothing is added to it. With write_report and package all, a successful run updates the Node section and commit line of COVERAGE.md at the repository root, leaving every other section as it is. Returns the job id at once; call job_result to wait for its outcome",
-            schema: [package, writeReport],
+                + " in the package's directory, or node.coverageFile) and reports line coverage per package and Overall. The script must enable Vitest's cobertura reporter; nothing is added to it. With package all, a successful run always writes its figures into the Node section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-package run never touches COVERAGE.md. Returns the job id at once; call job_result to wait for its outcome",
+            schema: [package],
             readOnly: false
         )
     {
         this._context = context;
         this._package = package;
-        this._writeReport = writeReport;
     }
 
     public static bool Offered(NodeRepository repository)
@@ -64,26 +60,12 @@ public sealed class CoverageTool : BuildTool
     {
         NodeRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
         string npm = this._context.Npm.Require();
-        bool writeReport = arguments.GetFlag(this._writeReport);
         string? Script(NodePackage package) =>
             CoverageScripts.For(package: package, overrideScript: repository.CoverageScript);
         string choice = arguments.GetChoice(
             property: this._package,
             allowed: ScriptTargets.Choices(repository: repository, script: Script)
         ) ?? ScriptTargets.ALL;
-
-        // One package's figures are not the repository's Overall, so only a run of every package may be recorded
-        if (writeReport && !StringComparer.Ordinal.Equals(x: choice, y: ScriptTargets.ALL))
-        {
-            throw new ToolArgumentException(
-                "Invalid value for "
-                    + this._writeReport.Name
-                    + "; it needs "
-                    + PackageChoice.NAME
-                    + " "
-                    + ScriptTargets.ALL
-            );
-        }
 
         IReadOnlyList<(NodePackage Package, string Script)> targets = PackageChoice.Targets(
             arguments: arguments,
@@ -94,6 +76,8 @@ public sealed class CoverageTool : BuildTool
         Dictionary<string, string> components = Components(repository: repository, targets: targets);
         DeleteStaleReports(components.Keys);
 
+        // A run of every package always records its figures in COVERAGE.md (the repository owner's rule: there is no
+        // option not to). One package's figures are not the repository's Overall, so a single-package run never writes it
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
             repositoryRoot: repository.RepositoryRoot,
@@ -103,7 +87,7 @@ public sealed class CoverageTool : BuildTool
             testParser: CompositeTestOutputParser.For(targets.Select(static target => target.Package.TestRunner)),
             coverage: new(
                 Files: [.. components.Keys],
-                ReportPath: writeReport
+                ReportPath: StringComparer.Ordinal.Equals(x: choice, y: ScriptTargets.ALL)
                     ? Path.Combine(path1: repository.RepositoryRoot, path2: CoverageFile.FILE_NAME)
                     : null,
                 Language: CoverageLanguage.Node,
@@ -138,20 +122,5 @@ public sealed class CoverageTool : BuildTool
         {
             File.Delete(file);
         }
-    }
-
-    private static SchemaProperty WriteReportProperty()
-    {
-        return new(
-            Name: "write_report",
-            Description: "When true and package is all, a successful run writes its figures into the Node section of COVERAGE.md at the repository root",
-            Values: null,
-            Pattern: null,
-            DefaultValue: SchemaProperty.FALSE,
-            Required: false
-        )
-        {
-            Flag = true,
-        };
     }
 }

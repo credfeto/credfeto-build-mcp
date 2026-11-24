@@ -106,9 +106,12 @@ public sealed class DotnetToolCatalogTests : TestBase
             comparer: StringComparer.Ordinal
         );
 
-        JsonElement writeReport = schema.GetProperty("properties").GetProperty("write_report");
-        Assert.Equal(expected: "boolean", actual: writeReport.GetProperty("type").GetString());
-        Assert.False(condition: writeReport.GetProperty("default").GetBoolean(), userMessage: "the report is opt-in");
+        // A full run always writes COVERAGE.md, so there is no property that could turn the report off
+        Assert.Equal(
+            expected: ["project"],
+            actual: schema.GetProperty("properties").EnumerateObject().Select(static property => property.Name),
+            comparer: StringComparer.Ordinal
+        );
     }
 
     [Fact]

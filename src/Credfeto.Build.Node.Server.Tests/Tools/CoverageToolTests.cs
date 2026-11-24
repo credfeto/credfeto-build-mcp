@@ -96,7 +96,7 @@ public sealed class CoverageToolTests : TestBase, IDisposable
             comparer: StringComparer.Ordinal
         );
         Assert.Same(expected: CoverageLanguage.Node, actual: definition.CoverageLanguage);
-        Assert.Null(definition.CoverageReportPath);
+        Assert.Equal(expected: this.InRepository(CoverageFile.FILE_NAME), actual: definition.CoverageReportPath);
 
         string webReport = this.InRepository("packages/web/coverage/cobertura-coverage.xml");
         string coreReport = this.InRepository("packages/core/coverage/cobertura-coverage.xml");
@@ -144,17 +144,28 @@ public sealed class CoverageToolTests : TestBase, IDisposable
     }
 
     [Fact]
-    public async Task WriteReportOfAllPackagesTargetsCoverageMarkdownAsync()
+    public void TheCoverageSchemaHasNoWayToSkipTheReport()
     {
-        Dictionary<string, JsonElement> arguments = Arguments();
-        arguments["write_report"] = JsonSerializer.SerializeToElement(
-            value: true,
-            jsonTypeInfo: TestJsonContext.Default.Boolean
+        BuildTool tool = TestTools.Find(
+            tools: this.Tools(this.Workspace(coverageScript: null, coverageFile: null)),
+            name: ToolNames.COVERAGE
         );
 
+        Assert.Equal(
+            expected: ["package"],
+            actual: tool.ProtocolTool.InputSchema.GetProperty("properties")
+                .EnumerateObject()
+                .Select(static property => property.Name),
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task CoverageOfAllPackagesAlwaysWritesCoverageMarkdownAsync()
+    {
         CallToolResult result = await this.CallAsync(
             repository: this.Workspace(coverageScript: null, coverageFile: null),
-            arguments: arguments
+            arguments: Arguments(("package", "all"))
         );
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
@@ -165,21 +176,15 @@ public sealed class CoverageToolTests : TestBase, IDisposable
     }
 
     [Fact]
-    public async Task WriteReportOfOnePackageIsRefusedAsync()
+    public async Task CoverageOfOnePackageNeverWritesCoverageMarkdownAsync()
     {
-        Dictionary<string, JsonElement> arguments = Arguments(("package", WEB));
-        arguments["write_report"] = JsonSerializer.SerializeToElement(
-            value: true,
-            jsonTypeInfo: TestJsonContext.Default.Boolean
-        );
-
         CallToolResult result = await this.CallAsync(
             repository: this.Workspace(coverageScript: null, coverageFile: null, rootScripts: []),
-            arguments: arguments
+            arguments: Arguments(("package", WEB))
         );
 
-        Assert.True(condition: result.IsError, userMessage: "one package's figures are not the Overall");
-        Assert.Empty(this._runner.Started);
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Null(Assert.Single(this._runner.Started).CoverageReportPath);
     }
 
     [Fact]
