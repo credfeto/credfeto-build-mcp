@@ -13,7 +13,7 @@ namespace Credfeto.Build.Python.Server.Tools;
 public sealed class DetectTool : BuildTool
 {
     public const string TEST_SUITE_NOTE =
-        "No pyproject.toml or requirements*.txt declares what these tests need. Add a pyproject.toml with a [project] table (or a requirements-dev.txt) at the repository root that declares pytest and coverage in a test extra, dependency group or requirements file, and commit it.";
+        "No pyproject.toml or requirements*.txt declares what these tests need. Call restore: it creates a minimal pyproject.toml (or requirements-dev.txt) at the repository root declaring pytest and coverage and these directories, which you then commit and complete.";
 
     private readonly ToolContext _context;
 

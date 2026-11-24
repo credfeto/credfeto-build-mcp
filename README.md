@@ -417,8 +417,8 @@ It installs, packs and starts like the .NET server:
 ## The Python server
 
 `Credfeto.Build.Python.Server` (command `credfeto-build-python`, registered as the `build-python` MCP server) is the
-third language server, built on `Credfeto.Build.Server` like the others. It detects Python projects; restore, test,
-lint and coverage jobs follow.
+third language server, built on `Credfeto.Build.Server` like the others. It detects Python projects and restores,
+tests and lints them as jobs; coverage follows.
 
 ### Python detection
 
@@ -441,9 +441,19 @@ Detection is strict and runs again on every tool call:
   in; one that is absolute or leaves the repository is refused, and one with no project is reported) and
   `timeoutMinutes` (default 30, at most 240).
 
-With no project the server **registers no tools**, and its instructions give the reason. The one exception is a
-repository with Python test files (`test_*.py` or `*_test.py`, outside dependency and cache directories) and no
-manifest at all: it gets `detect`, which lists the directories holding them.
+With no project the server **registers no tools**, and its instructions give the reason. A repository whose projects
+are all unsupported gets only `detect`. The one exception is a repository with Python test files (`test_*.py` or
+`*_test.py`, outside dependency and cache directories) and no manifest at all: detection stays strict, but the server
+offers `detect`, which lists the directories holding them, and `restore`, which first creates a manifest for them:
+
+- a minimal `pyproject.toml` at the repository root, with a `[project]` table named after the repository (its
+  `origin` remote, otherwise its directory), pytest and coverage in a `test` extra, and the test directories as
+  pytest `testpaths` (so tests under a hidden directory such as `.github` are collected);
+- or, when the root already has a `pyproject.toml` with only tool settings, a `requirements-dev.txt` listing pytest
+  and coverage.
+
+An existing file is never overwritten. The tool result's `notes` say what was created and ask the caller to commit it
+and add anything missing, such as the dependencies of the code under test.
 
 ### Following a Python repository
 
@@ -457,6 +467,50 @@ the lock files and `.ai/commands.json` are debounced and detected again, and the
 | Tool | Parameters | What it does |
 | --- | --- | --- |
 | `detect` | none | Lists the projects with their directories, installers, manifests, `requires-python`, test extras and groups, whether pytest and coverage are declared and why a project is unsupported, plus the `python3` on `PATH`, the timeout and any overrides error. With no manifest, it lists the directories holding Python test files instead. |
+| `job_result`, `job_status` | `id`; `wait_seconds` on `job_result` | As for the other servers: `job_result` waits for the job to finish. |
+| `lint` | `scope` (`all` default, `changed`), `package` | What the global pre-commit hook and super-linter run for Python; see Python lint below. |
+| `restore` | `package` (`all` default) | Installs each chosen project into its own `.venv`; see Python installs below. The only install path. |
+| `test` | `package` (`all` default) | `<venv>/bin/python -m pytest -p no:cacheprovider --color=no -rfE` from the project's directory, so the repository's own pytest configuration applies. Returns pass, fail and skip counts (errors count as failures, xfailed as skipped) and the failing test ids. |
+
+Every tool except `detect`, `job_status` and `job_result` starts a job and returns its id at once. `package` is `all`
+or one supported project's name. The job tools' results can carry `notes` for the caller.
+
+### Python installs
+
+- **One venv per project:** `<project>/.venv`, as the python instructions require, isolated from the system
+  site-packages. A project whose `.venv` git would not ignore is refused, so a venv is never committed.
+- **pip:** `python3 -m venv --clear` when the venv is missing or was never completed, then
+  `pip install --require-virtualenv --only-binary :all:` with every `requirements*.txt` (`-r`), the
+  `[project].dependencies` and the `dev`/`test`/`tests` extras and groups. **No package code runs at install time**:
+  only wheels are installed, and the project itself is never built or installed (tests import it from the project
+  directory), so a dependency with no wheel for this Python fails the install with pip's "no matching distribution"
+  error. A requirement that does not start with a distribution name (such as an option) is refused.
+- **uv** (a project with `uv.lock`): `uv sync --frozen --no-build --no-install-workspace` with the test extras and
+  groups, `UV_PYTHON_DOWNLOADS=never` and the `python3` on `PATH`.
+- **Undeclared test tools:** when a project does not declare pytest or coverage (or `pytest-cov`), they are installed
+  unpinned into its venv, and the result's `notes` tell the caller to declare them in a test extra, dependency group
+  or requirements file.
+- **Install if needed:** after a successful install the venv gets a stamp, the SHA-256 of the installer, the
+  interpreter and its version, and every manifest and lock file. `test` and `lint` install first only when the stamp
+  is missing or different.
+- **Interpreter:** `python3` from `PATH`, checked against `requires-python` before anything runs.
+- **Environment:** `VIRTUAL_ENV` with the venv's `bin` first on `PATH`, `PYTHONDONTWRITEBYTECODE=1`,
+  `PYTHONUNBUFFERED=1`, `NO_COLOR=1`, and pip's version check and prompts turned off. Any index the operator
+  configured for pip or uv is honoured; the server never adds one.
+
+### Python lint
+
+`lint` runs what the global pre-commit hook and CI's super-linter run for Python, so a clean `lint` means a clean
+commit and a clean CI lint:
+
+- `flake8`, then `pylint`, from the repository root, each finding the repository's own configuration there, as the
+  hook runs them. pylint gets the project's `.venv` site-packages on `PYTHONPATH`, so it sees the project's
+  dependencies as the hook's `run-pylint` wrapper does.
+- `pylint --rcfile .github/linters/.python-lint` when that file exists, as super-linter (v8,
+  `VALIDATE_PYTHON_PYLINT`) runs it. super-linter v8 has no plain `VALIDATE_PYTHON` language, so CI runs no flake8.
+- `scope` `all` lints every tracked `*.py` file; `changed` lints those changed against `HEAD` and new untracked ones.
+  Each file is linted with the project whose directory most closely holds it.
+- The job stops at the first linter that fails. flake8 and pylint are resolved from `PATH`.
 
 ### Installing and running the Python server
 
