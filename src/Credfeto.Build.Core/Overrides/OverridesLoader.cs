@@ -17,8 +17,6 @@ public static class OverridesLoader
 
     private const string DOTNET_SECTION = "dotnet";
     private const string NODE_SECTION = "node";
-
-    // Read by the Python server once it exists; a repository may already carry it
     private const string PYTHON_SECTION = "python";
 
     private static readonly JsonReaderOptions ReaderOptions = new()
@@ -131,7 +129,11 @@ public static class OverridesLoader
 
                 break;
             case PYTHON_SECTION:
-                reader.Skip();
+                (sections.Python, sections.PythonError) = ReadSection(
+                    reader: ref reader,
+                    typeInfo: CoreJsonContext.Default.PythonOverrides,
+                    name: PYTHON_SECTION
+                );
 
                 break;
             default:
@@ -198,14 +200,18 @@ public static class OverridesLoader
 
         public string? NodeError { get; set; }
 
+        public PythonOverrides? Python { get; set; }
+
+        public string? PythonError { get; set; }
+
         public bool UnknownSetting { get; set; }
 
         public OverridesLoadResult ToResult()
         {
             RepositoryOverrides overrides =
-                this.Dotnet is null && this.Node is null
+                this.Dotnet is null && this.Node is null && this.Python is null
                     ? RepositoryOverrides.None
-                    : new(Dotnet: this.Dotnet, Node: this.Node);
+                    : new(Dotnet: this.Dotnet, Node: this.Node, Python: this.Python);
 
             return new(
                 Overrides: overrides,
@@ -216,6 +222,7 @@ public static class OverridesLoader
             {
                 DotnetError = this.DotnetError,
                 NodeError = this.NodeError,
+                PythonError = this.PythonError,
             };
         }
     }

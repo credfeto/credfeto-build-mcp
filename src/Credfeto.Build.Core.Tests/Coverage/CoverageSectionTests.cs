@@ -22,6 +22,11 @@ public sealed class CoverageSectionTests : TestBase
 
     private const string PYTHON_AND_SHELL = "## Python\n\nn/a (no code)\n\n## Shell\n\nexcluded\n\n";
 
+    private const string PYTHON =
+        "## Python\n\n| Package | Line Coverage | Covered | Coverable |\n| --- | --- | --- | --- |\n| tools | 50.0% | 1 | 2 |\n| **Overall (Python)** | **50.0%** | **1** | **2** |\n";
+
+    private const string SHELL = "## Shell\n\nexcluded\n\n";
+
     private const string OLD_FOOTER = "---\n\nCaptured at commit `old` on 2026-01-01.\n";
 
     private const string NEW_FOOTER = "---\n\nCaptured at commit `" + SHA + "` on 2026-11-16.\n";
@@ -77,6 +82,41 @@ public sealed class CoverageSectionTests : TestBase
         Assert.Equal(
             expected: HEADER + DOTNET + "\n" + NODE + "\n" + notes + NEW_FOOTER,
             actual: MergeNode(HEADER + DOTNET + "\n" + notes + OLD_FOOTER)
+        );
+    }
+
+    [Fact]
+    public static void ThePythonSectionHasItsOwnHeadingColumnAndOverallRow()
+    {
+        CoverageSummary summary = new(
+            Assemblies: [new(Name: "tools", LinesCovered: 1, LinesValid: 2, LineCoverage: 50d)],
+            Overall: new(Name: CoverageAggregator.OVERALL, LinesCovered: 1, LinesValid: 2, LineCoverage: 50d)
+        );
+
+        Assert.Equal(
+            expected: PYTHON,
+            actual: CoverageMarkdown.FormatSection(summary: summary, language: CoverageLanguage.Python)
+        );
+    }
+
+    [Fact]
+    public static void ANewPythonSectionGoesAfterNodeAndBeforeShell()
+    {
+        Assert.Equal(
+            expected: HEADER + DOTNET + "\n" + NODE + "\n" + PYTHON + "\n" + SHELL + NEW_FOOTER,
+            actual: MergePython(HEADER + DOTNET + "\n" + NODE + "\n" + SHELL + OLD_FOOTER)
+        );
+    }
+
+    [Fact]
+    public static void AHandWrittenPythonSectionIsReplacedAndEveryOtherSectionIsLeftAlone()
+    {
+        const string handWritten =
+            "## Python\n\n| Package | Line Coverage |\n| --- | --- |\n| scripts/check | 98.5% |\n| **Overall (Python)** | **98.5%** |\n\n";
+
+        Assert.Equal(
+            expected: HEADER + DOTNET + "\n" + NODE + "\n" + PYTHON + "\n" + SHELL + NEW_FOOTER,
+            actual: MergePython(HEADER + DOTNET + "\n" + NODE + "\n" + handWritten + SHELL + OLD_FOOTER)
         );
     }
 
@@ -185,10 +225,20 @@ public sealed class CoverageSectionTests : TestBase
 
     private static string MergeNode(string existing)
     {
+        return Merge(existing: existing, language: CoverageLanguage.Node, section: NODE);
+    }
+
+    private static string MergePython(string existing)
+    {
+        return Merge(existing: existing, language: CoverageLanguage.Python, section: PYTHON);
+    }
+
+    private static string Merge(string existing, CoverageLanguage language, string section)
+    {
         return CoverageFile.Merge(
             existing: existing,
-            language: CoverageLanguage.Node,
-            section: NODE,
+            language: language,
+            section: section,
             headSha: SHA,
             capturedOn: CapturedOn
         );

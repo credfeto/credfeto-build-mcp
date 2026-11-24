@@ -11,6 +11,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
+- The Python server (`credfeto-build-python`, MCP server `build-python`), a Native AOT dotnet tool: strict detection of `pyproject.toml` (`[project]` table) and `requirements*.txt` projects at the root, in `src/` and in `python.projects` directories, pip or uv (with `uv.lock`) with poetry, pipenv and pdm reported as unsupported, a `detect` tool (also offered when a repository has Python test files but no manifest), a non-recursive repository watch, `--self-test`, and the pointer and `linux-x64` tool packages; Core reads the `python` section of `.ai/commands.json` (`enabled`, `projects`, `timeoutMinutes`) on its own and adds the `Python` COVERAGE.md language (#58)
 ### Fixed
 ### Changed
 ### Deprecated

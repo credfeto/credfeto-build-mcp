@@ -19,6 +19,7 @@ that speaks MCP over stdio.
 | `Credfeto.Build.Server` | The language-neutral MCP server infrastructure every server shares (AOT-compatible library, not packed on its own): the command line and self-test, the stdio host, the live tool list that follows the repository, the repository watcher, the `job_status`/`job_result` tools, the tool argument and schema helpers, the tool errors and the short command runner. |
 | `Credfeto.Build.Dotnet.Server` | The `.NET` server (`credfeto-build-dotnet`), a Native AOT executable. |
 | `Credfeto.Build.Node.Server` | The Node server (`credfeto-build-node`), a Native AOT executable. |
+| `Credfeto.Build.Python.Server` | The Python server (`credfeto-build-python`), a Native AOT executable. |
 | `Credfeto.Build.Testing` | Test support shared by the test projects: temporary directories, isolated git, a recording job runner and a minimal MCP client. |
 | `*.Tests` | Unit tests for each of the above. |
 
@@ -412,6 +413,62 @@ It installs, packs and starts like the .NET server:
   `Credfeto.Build.Node.Server.linux-x64`.
 
 `StartupTimeTests` in `Credfeto.Build.Node.Server.Tests` time the published binary named by `BUILD_MCP_SERVER_BINARY`.
+
+## The Python server
+
+`Credfeto.Build.Python.Server` (command `credfeto-build-python`, registered as the `build-python` MCP server) is the
+third language server, built on `Credfeto.Build.Server` like the others. It detects Python projects; restore, test,
+lint and coverage jobs follow.
+
+### Python detection
+
+Detection is strict and runs again on every tool call:
+
+- **Projects** are a `pyproject.toml` with a `[project]` table, or any `requirements*.txt`, at the repository root, in
+  `src/`, or in a directory the `python.projects` override lists. A `pyproject.toml` that holds only `[tool.*]`
+  settings is not a project.
+- **Name:** `[project].name`, otherwise the project's repository-relative directory (`.` for the root). Names are
+  unique and never `all`: a clash falls back to the directory.
+- **Installer:** pip with a virtual environment, or uv when the project has a `uv.lock` (which needs a `[project]`
+  table). A `poetry.lock`, `Pipfile`, `Pipfile.lock`, `pdm.lock` or a poetry-only `pyproject.toml` is reported as
+  unsupported, as is a manifest that cannot be read.
+- **What a project declares:** `requires-python`, `[project].dependencies`, the optional-dependency extras and PEP 735
+  dependency groups named `dev`, `test` or `tests` (with `include-group` entries expanded), and whether pytest and
+  coverage (or `pytest-cov`) are declared in those or in a requirements file.
+- **TOML** is read with Tomlyn's source-generated untyped model, so no reflection is needed under Native AOT. Each
+  manifest is read up to 1 MiB; a larger or malformed one is reported by its path, never by its content.
+- **Overrides:** the `python` section of `.ai/commands.json` applies `enabled`, `projects` (more directories to look
+  in; one that is absolute or leaves the repository is refused, and one with no project is reported) and
+  `timeoutMinutes` (default 30, at most 240).
+
+With no project the server **registers no tools**, and its instructions give the reason. The one exception is a
+repository with Python test files (`test_*.py` or `*_test.py`, outside dependency and cache directories) and no
+manifest at all: it gets `detect`, which lists the directories holding them.
+
+### Following a Python repository
+
+The repository root, `src/`, `.ai/` and the `python.projects` directories are each watched **without recursion**, so
+a virtual environment never costs one kernel watch per directory. Changes to `pyproject.toml`, `requirements*.txt`,
+the lock files and `.ai/commands.json` are debounced and detected again, and the server sends
+`notifications/tools/list_changed` when its tools change.
+
+### Python tools
+
+| Tool | Parameters | What it does |
+| --- | --- | --- |
+| `detect` | none | Lists the projects with their directories, installers, manifests, `requires-python`, test extras and groups, whether pytest and coverage are declared and why a project is unsupported, plus the `python3` on `PATH`, the timeout and any overrides error. With no manifest, it lists the directories holding Python test files instead. |
+
+### Installing and running the Python server
+
+It installs, packs and starts like the other servers:
+
+- install it with `dotnet tool install -g Credfeto.Build.Python.Server`;
+- check it with `credfeto-build-python --self-test`;
+- a plain `dotnet pack` in `src/` produces both `Credfeto.Build.Python.Server` and
+  `Credfeto.Build.Python.Server.linux-x64`.
+
+`StartupTimeTests` in `Credfeto.Build.Python.Server.Tests` time the published binary named by
+`BUILD_MCP_SERVER_BINARY`.
 
 ## Changelog
 
