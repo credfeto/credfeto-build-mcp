@@ -32,7 +32,7 @@ public sealed class DetectToolTests : TestBase
         IReadOnlyList<McpServerTool> tools = TestTools.Catalog(TestTools.Detected(Repository()));
 
         Assert.Equal(
-            expected: ["detect", "restore", "test", "lint", "job_status", "job_result"],
+            expected: ["detect", "restore", "test", "lint", "coverage", "job_status", "job_result"],
             actual: tools.Select(static tool => tool.ProtocolTool.Name),
             comparer: StringComparer.Ordinal
         );

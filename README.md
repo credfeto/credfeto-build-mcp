@@ -477,7 +477,7 @@ It installs, packs and starts like the .NET server:
 
 `Credfeto.Build.Python.Server` (command `credfeto-build-python`, registered as the `build-python` MCP server) is the
 third language server, built on `Credfeto.Build.Server` like the others. It detects Python projects and restores,
-tests and lints them as jobs; coverage follows.
+tests, lints and measures the coverage of them as jobs.
 
 ### Python detection
 
@@ -525,6 +525,7 @@ the lock files and `.ai/commands.json` are debounced and detected again, and the
 
 | Tool | Parameters | What it does |
 | --- | --- | --- |
+| `coverage` | `package` (`all` default) | `coverage run -m pytest` (the `test` flags) and `coverage xml`, read as one row per project. With `package` `all`, a successful run always writes the `## Python` section of `COVERAGE.md`; a single-project run replaces only its own row. See Python coverage below. |
 | `detect` | none | Lists the projects with their directories, installers, manifests, `requires-python`, test extras and groups, whether pytest and coverage are declared and why a project is unsupported, plus the `python3` on `PATH`, the timeout and any overrides error. With no manifest, it lists the directories holding Python test files instead. |
 | `job_result`, `job_status` | `id`; `wait_seconds` on `job_result` | As for the other servers: `job_result` waits for the job to finish. |
 | `lint` | `scope` (`all` default, `changed`), `package` | What the global pre-commit hook and super-linter run for Python; see Python lint below. |
@@ -570,6 +571,24 @@ commit and a clean CI lint:
 - `scope` `all` lints every tracked `*.py` file; `changed` lints those changed against `HEAD` and new untracked ones.
   Each file is linted with the project whose directory most closely holds it.
 - The job stops at the first linter that fails. flake8 and pylint are resolved from `PATH`.
+
+### Python coverage
+
+- **Run:** in each chosen project, `<venv>/bin/python -m coverage run -m pytest -p no:cacheprovider --color=no -rfE`
+  from the project's directory, then `coverage xml`. The repository's own coverage configuration (`.coveragerc`,
+  `[tool.coverage]`) applies; only the data file (`COVERAGE_FILE`) and the Cobertura report are the server's, inside
+  the git-ignored `.venv`, so no `.coverage` file is left in the repository. Earlier reports are deleted first.
+- **Figures:** each project is one row, named after the project, with all of its report's packages merged; the shared
+  Cobertura parser and aggregator give per-project and Overall (Python) line coverage, with covered and coverable line
+  counts, as the `.NET` and Node sections have. These are statement (line) figures, so a repository with
+  `branch = true` sees a different number from `coverage report`.
+- **`COVERAGE.md`:** a successful run of every project (`package` `all`) always replaces the `## Python` section
+  (after Node and before Shell) and the commit line of `COVERAGE.md` at the repository root, and leaves every other
+  section as it is. There is no option to skip it. A hand-written Python section of any shape is replaced by the
+  standard table on the first write.
+- **One project:** a single-project run replaces only that project's row and sums Overall (Python) again from every
+  row's counts, exactly as the `.NET` and Node tools do.
+- **Failures:** a failed run (failing tests, or no tests collected) stops the job and records nothing.
 
 ### Installing and running the Python server
 

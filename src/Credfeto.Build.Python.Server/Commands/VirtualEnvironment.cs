@@ -25,6 +25,13 @@ public sealed record VirtualEnvironment(string ProjectDirectory, string Director
 
     public string StampPath => Path.Combine(path1: this.Directory, path2: STAMP_FILE);
 
+    // coverage.py's data file and the Cobertura report made from it: server-owned, inside the git-ignored venv, so a
+    // run never leaves a .coverage file in the repository
+    public string CoverageDataPath => Path.Combine(path1: this.Directory, path2: ".credfeto-build-python-coverage");
+
+    public string CoverageReportPath =>
+        Path.Combine(path1: this.Directory, path2: ".credfeto-build-python-coverage.xml");
+
     public static VirtualEnvironment For(string repositoryRoot, PythonProject project)
     {
         string projectDirectory = ProjectReader.FullPath(
