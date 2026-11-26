@@ -23,4 +23,7 @@ public sealed record JobResult(
     IReadOnlyList<string>? ChangedFiles,
     string? CoverageReportPath,
     string? CoverageReportNote
-);
+)
+{
+    public string? Note { get; init; }
+}

@@ -65,6 +65,13 @@ public static class ToolSchema
             return;
         }
 
+        if (property.StringArray)
+        {
+            WriteStringArray(writer: writer, property: property);
+
+            return;
+        }
+
         if (property.Flag)
         {
             writer.WriteBoolean(
@@ -103,12 +110,31 @@ public static class ToolSchema
 
     private static string TypeName(SchemaProperty property)
     {
+        if (property.StringArray)
+        {
+            return "array";
+        }
+
         if (property.Flag)
         {
             return "boolean";
         }
 
         return property.WholeNumber ? "integer" : "string";
+    }
+
+    private static void WriteStringArray(Utf8JsonWriter writer, SchemaProperty property)
+    {
+        writer.WriteStartObject("items");
+        writer.WriteString(propertyName: "type", value: "string");
+
+        if (property.Pattern is not null)
+        {
+            writer.WriteString(propertyName: "pattern", value: property.Pattern);
+        }
+
+        writer.WriteEndObject();
+        writer.WriteEndObject();
     }
 
     private static void WriteInteger(Utf8JsonWriter writer, SchemaProperty property)

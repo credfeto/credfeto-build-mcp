@@ -69,6 +69,32 @@ public static class JobStarter
         );
     }
 
+    public static ValueTask<string> StartAsync(
+        IJobRunner runner,
+        string repositoryRoot,
+        TimeSpan timeout,
+        string kind,
+        IReadOnlyList<ProcessStep> steps,
+        ITestOutputParser? testParser,
+        JobCoverage coverage,
+        IChangedFilesProbe? changedFiles,
+        CancellationToken cancellationToken
+    )
+    {
+        return StartAsync(
+            runner: runner,
+            repositoryRoot: repositoryRoot,
+            timeout: timeout,
+            kind: kind,
+            steps: steps,
+            testParser: testParser,
+            coverage: coverage,
+            changedFiles: changedFiles,
+            note: null,
+            cancellationToken: cancellationToken
+        );
+    }
+
     public static async ValueTask<string> StartAsync(
         IJobRunner runner,
         string repositoryRoot,
@@ -78,6 +104,7 @@ public static class JobStarter
         ITestOutputParser? testParser,
         JobCoverage coverage,
         IChangedFilesProbe? changedFiles,
+        string? note,
         CancellationToken cancellationToken
     )
     {
@@ -97,6 +124,7 @@ public static class JobStarter
         )
         {
             ChangedFiles = changedFiles,
+            Note = note,
             CoverageReportPath = coverage.ReportPath,
             CoverageReportComponent = coverage.ReportComponent,
             CoverageLanguage = coverage.Language,
