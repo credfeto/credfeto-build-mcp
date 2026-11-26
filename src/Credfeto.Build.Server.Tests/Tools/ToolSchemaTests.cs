@@ -55,4 +55,24 @@ public sealed class ToolSchemaTests : TestBase
             actual: schema.GetRawText()
         );
     }
+
+    [Fact]
+    public static void AStringArrayDescribesItsItems()
+    {
+        JsonElement schema = ToolSchema.Create([
+            new(Name: "files", Description: "F", Values: null, Pattern: "^[a-z]*$", DefaultValue: null, Required: false)
+            {
+                StringArray = true,
+            },
+            new(Name: "tags", Description: "T", Values: null, Pattern: null, DefaultValue: null, Required: false)
+            {
+                StringArray = true,
+            },
+        ]);
+
+        Assert.Equal(
+            expected: """{"type":"object","properties":{"files":{"type":"array","description":"F","items":{"type":"string","pattern":"^[a-z]*$"}},"tags":{"type":"array","description":"T","items":{"type":"string"}}},"additionalProperties":false}""",
+            actual: schema.GetRawText()
+        );
+    }
 }

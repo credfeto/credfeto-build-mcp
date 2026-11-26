@@ -111,6 +111,30 @@ public sealed partial class ToolArguments
             );
     }
 
+    // Absent is an empty list; every item must wholly match the pattern
+    public IReadOnlyList<string> GetStrings(SchemaProperty property, Regex pattern)
+    {
+        if (!this._values.TryGetValue(key: property.Name, value: out JsonElement value))
+        {
+            return [];
+        }
+
+        // Anything but an array reads as one item that cannot match, so every bad shape gets the same answer
+        string?[] items =
+            value.ValueKind == JsonValueKind.Array ? [.. value.EnumerateArray().Select(ItemText)] : [null];
+
+        return items.All(item => IsWholeMatch(value: item, pattern: pattern))
+            ? [.. items.OfType<string>()]
+            : throw new ToolArgumentException(
+                "Invalid value for " + property.Name + "; expected a list of values matching " + property.Pattern
+            );
+    }
+
+    private static string? ItemText(JsonElement item)
+    {
+        return item.ValueKind == JsonValueKind.String ? item.GetString() : null;
+    }
+
     public int GetInteger(SchemaProperty property)
     {
         if (!this._values.TryGetValue(key: property.Name, value: out JsonElement value))

@@ -18,6 +18,9 @@ public sealed record SchemaProperty(
 
     public bool Flag { get; init; }
 
+    // A list of strings; Pattern, when set, applies to each item rather than to the list
+    public bool StringArray { get; init; }
+
     // A whole number from Minimum to Maximum; DefaultValue holds its default in invariant digits
     public bool WholeNumber { get; init; }
 

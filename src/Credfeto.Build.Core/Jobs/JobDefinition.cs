@@ -18,6 +18,9 @@ public sealed record JobDefinition(
 {
     public IChangedFilesProbe? ChangedFiles { get; init; }
 
+    // Told to the caller with the job's result, for what the tool knew when it started the job but could not act on
+    public string? Note { get; init; }
+
     public string? CoverageReportPath { get; init; }
 
     // When set, the report replaces only this component's row of the section and sums Overall again from the line
