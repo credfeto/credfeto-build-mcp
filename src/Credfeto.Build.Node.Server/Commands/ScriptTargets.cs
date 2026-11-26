@@ -18,17 +18,26 @@ public static class ScriptTargets
         Func<NodePackage, string?> script
     )
     {
-        IEnumerable<NodePackage> candidates = StringComparer.Ordinal.Equals(x: choice, y: ALL)
-            ? AllTargets(repository: repository, script: script)
-            : repository.Packages.Where(package => StringComparer.Ordinal.Equals(x: package.Name, y: choice));
-
         return
         [
-            .. candidates
+            .. Packages(repository: repository, choice: choice, hasScript: package => script(package) is not null)
                 .Select(package => (Package: package, Script: script(package)))
                 .Where(static target => target.Script is not null)
                 .Select(static target => (target.Package, target.Script!)),
         ];
+    }
+
+    // The packages the choice names: the one named, which may not have the script, or for all, the packages chosen
+    // as described above
+    public static IEnumerable<NodePackage> Packages(
+        NodeRepository repository,
+        string choice,
+        Func<NodePackage, bool> hasScript
+    )
+    {
+        return StringComparer.Ordinal.Equals(x: choice, y: ALL)
+            ? AllTargets(repository: repository, hasScript: hasScript)
+            : repository.Packages.Where(package => StringComparer.Ordinal.Equals(x: package.Name, y: choice));
     }
 
     // The package names a script tool can be asked for, sorted, after all
@@ -45,7 +54,7 @@ public static class ScriptTargets
         ];
     }
 
-    private static IEnumerable<NodePackage> AllTargets(NodeRepository repository, Func<NodePackage, string?> script)
+    private static IEnumerable<NodePackage> AllTargets(NodeRepository repository, Func<NodePackage, bool> hasScript)
     {
         foreach (NodeInstallRoot installRoot in repository.InstallRoots)
         {
@@ -53,7 +62,7 @@ public static class ScriptTargets
             [
                 .. repository.Packages.Where(package =>
                     StringComparer.Ordinal.Equals(x: package.InstallRoot, y: installRoot.RelativeDirectory)
-                    && script(package) is not null
+                    && hasScript(package)
                 ),
             ];
 

@@ -361,7 +361,7 @@ watched directory, or by the next `detect` call, which always detects afresh.
 | `job_result`, `job_status` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
 | `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
 | `restore` | none | `npm ci --ignore-scripts --no-audit --no-fund` in every install root. The only install path. |
-| `test` | `scope` (`unit` default, `all`), `package` | `unit` runs `test:noe2e` where a package has it (as the pre-commit hook does), otherwise `test`; `all` runs `test`. `node.testScript` replaces the choice. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
+| `test` | `scope` (`unit` default, `all`), `package` | `unit` runs `test:noe2e` (as the pre-commit hook does): the package's own, otherwise its install root's `test:noe2e`, run from the install root with the package's directory after `--` as the runner's path filter. A workspace package with neither is refused with no job started; only an install root's own package without `test:noe2e` falls back to `test`. `all` runs `test`. `node.testScript` replaces the choice. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
 | `update_package` | `package_id`, `version` (optional, `latest` when left out), `package` (`all` default) | `npm install <id>@<version>` in each chosen package whose `package.json` declares it, keeping its section, then lists the version installed. |
 
 Every tool except `detect`, `job_status` and `job_result` starts a job and returns its id at once.

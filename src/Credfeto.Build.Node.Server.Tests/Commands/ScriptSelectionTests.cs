@@ -82,37 +82,223 @@ public sealed class ScriptSelectionTests : TestBase
     [InlineData(TestScripts.SCOPE_ALL, "test")]
     public static void TheScopeChoosesBetweenTestAndNoE2e(string scope, string expected)
     {
-        NodePackage web = SampleWorkspace.Create(ROOT).Packages[1];
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
+        NodePackage web = repository.Packages[1];
 
-        Assert.Equal(expected: expected, actual: TestScripts.For(package: web, scope: scope, overrideScript: null));
+        ScriptRun? run = TestScripts.For(repository: repository, package: web, scope: scope, overrideScript: null);
+
+        Assert.NotNull(run);
+        Assert.Equal(expected: expected, actual: run.Script);
+        Assert.Same(expected: web, actual: run.Package);
+        Assert.Null(run.PathFilter);
     }
 
     [Fact]
-    public void UnitFallsBackToTestWithoutNoE2e()
+    public void UnitNeverFallsBackToAWorkspaceTestScript()
     {
-        NodePackage core = SampleWorkspace.Create(ROOT).Packages[2];
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
 
-        Assert.Equal(
-            expected: "test",
-            actual: TestScripts.For(package: core, scope: TestScripts.SCOPE_UNIT, overrideScript: null)
+        Assert.Null(
+            TestScripts.For(
+                repository: repository,
+                package: repository.Packages[2],
+                scope: TestScripts.SCOPE_UNIT,
+                overrideScript: null
+            )
         );
+    }
+
+    [Fact]
+    public void UnitRunsTheInstallRootNoE2eLimitedToTheWorkspace()
+    {
+        NodeRepository repository = SampleWorkspace.Create(
+            repositoryRoot: ROOT,
+            rootScripts: [NodeScripts.TEST, NodeScripts.TEST_NO_E2E]
+        );
+
+        ScriptRun? run = TestScripts.For(
+            repository: repository,
+            package: repository.Packages[2],
+            scope: TestScripts.SCOPE_UNIT,
+            overrideScript: null
+        );
+
+        Assert.NotNull(run);
+        Assert.Same(expected: repository.Packages[0], actual: run.Package);
+        Assert.Equal(expected: NodeScripts.TEST_NO_E2E, actual: run.Script);
+        Assert.Equal(expected: "packages/core", actual: run.PathFilter);
+    }
+
+    [Fact]
+    public void UnitPrefersTheWorkspaceOwnNoE2eOverTheInstallRoot()
+    {
+        NodeRepository repository = SampleWorkspace.Create(
+            repositoryRoot: ROOT,
+            rootScripts: [NodeScripts.TEST, NodeScripts.TEST_NO_E2E]
+        );
+
+        ScriptRun? run = TestScripts.For(
+            repository: repository,
+            package: repository.Packages[1],
+            scope: TestScripts.SCOPE_UNIT,
+            overrideScript: null
+        );
+
+        Assert.NotNull(run);
+        Assert.Same(expected: repository.Packages[1], actual: run.Package);
+        Assert.Equal(expected: NodeScripts.TEST_NO_E2E, actual: run.Script);
+        Assert.Null(run.PathFilter);
+    }
+
+    [Fact]
+    public void UnitFallsBackToTestForAnInstallRootWithoutNoE2e()
+    {
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
+
+        ScriptRun? run = TestScripts.For(
+            repository: repository,
+            package: repository.Packages[0],
+            scope: TestScripts.SCOPE_UNIT,
+            overrideScript: null
+        );
+
+        Assert.NotNull(run);
+        Assert.Equal(expected: NodeScripts.TEST, actual: run.Script);
+        Assert.Null(run.PathFilter);
+    }
+
+    [Fact]
+    public void UnitPrefersNoE2eForAnInstallRootThatHasIt()
+    {
+        NodeRepository repository = SampleWorkspace.Create(
+            repositoryRoot: ROOT,
+            rootScripts: [NodeScripts.TEST, NodeScripts.TEST_NO_E2E]
+        );
+
+        ScriptRun? run = TestScripts.For(
+            repository: repository,
+            package: repository.Packages[0],
+            scope: TestScripts.SCOPE_UNIT,
+            overrideScript: null
+        );
+
+        Assert.NotNull(run);
+        Assert.Equal(expected: NodeScripts.TEST_NO_E2E, actual: run.Script);
+        Assert.Null(run.PathFilter);
+    }
+
+    [Fact]
+    public void AllScopeStillRunsAWorkspaceTestScript()
+    {
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
+
+        ScriptRun? run = TestScripts.For(
+            repository: repository,
+            package: repository.Packages[2],
+            scope: TestScripts.SCOPE_ALL,
+            overrideScript: null
+        );
+
+        Assert.NotNull(run);
+        Assert.Same(expected: repository.Packages[2], actual: run.Package);
+        Assert.Equal(expected: NodeScripts.TEST, actual: run.Script);
+    }
+
+    [Fact]
+    public void AWorkspaceUnderAnInstallRootWithoutAPackageHasNoUnitScript()
+    {
+        NodeRepository repository = new(
+            RepositoryRoot: ROOT,
+            InstallRoots: [new NodeInstallRoot(RelativeDirectory: "src", LockFile: "src/package-lock.json")],
+            Packages:
+            [
+                new NodePackage(Name: "app", RelativeDirectory: "src/apps/app", Scripts: [NodeScripts.TEST])
+                {
+                    InstallRoot = "src",
+                },
+            ],
+            Timeout: TimeSpan.FromMinutes(1)
+        );
+
+        Assert.Null(
+            TestScripts.For(
+                repository: repository,
+                package: repository.Packages[0],
+                scope: TestScripts.SCOPE_UNIT,
+                overrideScript: null
+            )
+        );
+    }
+
+    [Fact]
+    public void TheFilterIsRelativeToANestedInstallRoot()
+    {
+        NodeRepository repository = new(
+            RepositoryRoot: ROOT,
+            InstallRoots: [new NodeInstallRoot(RelativeDirectory: "src", LockFile: "src/package-lock.json")],
+            Packages:
+            [
+                new NodePackage(Name: "source-root", RelativeDirectory: "src", Scripts: [NodeScripts.TEST_NO_E2E])
+                {
+                    InstallRoot = "src",
+                },
+                new NodePackage(Name: "app", RelativeDirectory: "src/apps/app", Scripts: [NodeScripts.TEST])
+                {
+                    InstallRoot = "src",
+                },
+            ],
+            Timeout: TimeSpan.FromMinutes(1)
+        );
+
+        ScriptRun? run = TestScripts.For(
+            repository: repository,
+            package: repository.Packages[1],
+            scope: TestScripts.SCOPE_UNIT,
+            overrideScript: null
+        );
+
+        Assert.NotNull(run);
+        Assert.Same(expected: repository.Packages[0], actual: run.Package);
+        Assert.Equal(expected: "apps/app", actual: run.PathFilter);
     }
 
     [Fact]
     public void TheOverrideOnlySelectsAScriptThePackageHas()
     {
-        NodeRepository repository = SampleWorkspace.Create(ROOT);
+        NodeRepository repository = SampleWorkspace.Create(
+            repositoryRoot: ROOT,
+            rootScripts: [NodeScripts.TEST, NodeScripts.TEST_NO_E2E]
+        );
 
-        Assert.Equal(
-            expected: "test:e2e",
-            actual: TestScripts.For(
-                package: repository.Packages[1],
+        ScriptRun? run = TestScripts.For(
+            repository: repository,
+            package: repository.Packages[1],
+            scope: TestScripts.SCOPE_UNIT,
+            overrideScript: "test:e2e"
+        );
+
+        Assert.NotNull(run);
+        Assert.Equal(expected: "test:e2e", actual: run.Script);
+        Assert.Null(run.PathFilter);
+        Assert.Null(
+            TestScripts.For(
+                repository: repository,
+                package: repository.Packages[2],
                 scope: TestScripts.SCOPE_UNIT,
                 overrideScript: "test:e2e"
             )
         );
-        Assert.Null(
-            TestScripts.For(package: repository.Packages[2], scope: TestScripts.SCOPE_UNIT, overrideScript: "test:e2e")
+    }
+
+    [Fact]
+    public void TheNamedPackageIsChosenEvenWithoutTheScript()
+    {
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
+
+        NodePackage package = Assert.Single(
+            ScriptTargets.Packages(repository: repository, choice: SampleWorkspace.CORE, hasScript: static _ => false)
         );
+
+        Assert.Equal(expected: SampleWorkspace.CORE, actual: package.Name);
     }
 }

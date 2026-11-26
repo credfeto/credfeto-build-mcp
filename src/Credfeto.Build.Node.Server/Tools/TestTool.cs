@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -6,14 +7,18 @@ using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Testing;
 using Credfeto.Build.Server.Tools;
+using Credfeto.Build.Server.Tools.Exceptions;
 
 namespace Credfeto.Build.Node.Server.Tools;
 
 public sealed class TestTool : BuildTool
 {
+    public const string NO_UNIT_SCRIPT =
+        "The package has no unit test script: neither it nor its install root's package has test:noe2e, and unit never runs a workspace package's test script. Use scope all to run its test script";
+
     private static readonly SchemaProperty Scope = new(
         Name: "scope",
-        Description: "unit runs test:noe2e where a package has it (as the pre-commit hook does), otherwise test; all runs test",
+        Description: "unit runs test:noe2e (as the pre-commit hook does): the package's own, otherwise its install root's test:noe2e limited to the package's directory; an install root's own package without test:noe2e runs test. all runs test",
         Values: [TestScripts.SCOPE_UNIT, TestScripts.SCOPE_ALL],
         Pattern: null,
         DefaultValue: TestScripts.SCOPE_UNIT,
@@ -38,7 +43,7 @@ public sealed class TestTool : BuildTool
         : base(
             name: ToolNames.TEST,
             title: "Run npm tests",
-            description: "Starts a job that runs the test script of the package chosen in package with CI=true, installing first when node_modules is missing or older than the lock file. scope unit (the default) prefers test:noe2e, as the pre-commit hook does; all prefers test; node.testScript in .ai/commands.json replaces the choice for packages that have it. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. Returns the job id at once; call job_result to wait for its outcome, with pass/fail counts and failing test names for Vitest, Jest and node --test",
+            description: "Starts a job that runs the test script of the package chosen in package with CI=true, installing first when node_modules is missing or older than the lock file. scope unit (the default) runs test:noe2e, as the pre-commit hook does: a workspace package without its own runs its install root's test:noe2e from the install root with the package's directory after --, and is refused with no job started when the install root's package has none either; only an install root's own package falls back to test. all prefers test; node.testScript in .ai/commands.json replaces the choice for packages that have it. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. Returns the job id at once; call job_result to wait for its outcome, with pass/fail counts and failing test names for Vitest, Jest and node --test",
             schema: [Scope, package],
             readOnly: false
         )
@@ -61,29 +66,71 @@ public sealed class TestTool : BuildTool
         string scope = arguments.GetChoice(Scope) ?? TestScripts.SCOPE_UNIT;
         NodeRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
         string npm = this._context.Npm.Require();
-        IReadOnlyList<(NodePackage Package, string Script)> targets = PackageChoice.Targets(
+        string choice = PackageChoice.Choice(
             arguments: arguments,
             property: this._package,
             repository: repository,
-            script: package => TestScripts.For(package: package, scope: scope, overrideScript: repository.TestScript)
+            script: package => AnyTestScript(repository: repository, package: package)
         );
+        IReadOnlyList<ScriptRun> runs = Runs(repository: repository, choice: choice, scope: scope);
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
             repositoryRoot: repository.RepositoryRoot,
             timeout: repository.Timeout,
             kind: ToolNames.TEST,
-            steps: JobSteps.ForScripts(repository: repository, targets: targets, npm: npm),
-            testParser: CompositeTestOutputParser.For(targets.Select(static target => target.Package.TestRunner)),
+            steps: JobSteps.ForRuns(repository: repository, runs: runs, npm: npm),
+            testParser: CompositeTestOutputParser.For(runs.Select(static run => run.Package.TestRunner)),
             coverageFiles: [],
             changedFiles: null,
             cancellationToken: cancellationToken
         );
     }
 
+    private static IReadOnlyList<ScriptRun> Runs(NodeRepository repository, string choice, string scope)
+    {
+        ScriptRun? Run(NodePackage package) =>
+            TestScripts.For(
+                repository: repository,
+                package: package,
+                scope: scope,
+                overrideScript: repository.TestScript
+            );
+
+        IReadOnlyList<ScriptRun> runs =
+        [
+            .. ScriptTargets
+                .Packages(repository: repository, choice: choice, hasScript: package => Run(package) is not null)
+                .Select(Run)
+                .OfType<ScriptRun>(),
+        ];
+
+        return runs.Count != 0
+            ? runs
+            : throw new ToolUnavailableException(NoRunsReason(repository: repository, choice: choice, scope: scope));
+    }
+
+    // A named package that has a test script but none unit can run is told why, rather than that the script is gone
+    private static string NoRunsReason(NodeRepository repository, string choice, string scope)
+    {
+        return
+            repository.TestScript is null
+            && StringComparer.Ordinal.Equals(x: scope, y: TestScripts.SCOPE_UNIT)
+            && !StringComparer.Ordinal.Equals(x: choice, y: ScriptTargets.ALL)
+            ? NO_UNIT_SCRIPT
+            : PackageChoice.NO_SCRIPT;
+    }
+
     // Whether the package has a test script under either scope, so the package enum does not depend on the scope
     private static string? AnyTestScript(NodeRepository repository, NodePackage package)
     {
-        return TestScripts.For(package: package, scope: TestScripts.SCOPE_ALL, overrideScript: repository.TestScript);
+        return TestScripts
+            .For(
+                repository: repository,
+                package: package,
+                scope: TestScripts.SCOPE_ALL,
+                overrideScript: repository.TestScript
+            )
+            ?.Script;
     }
 }
