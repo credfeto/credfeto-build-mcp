@@ -122,6 +122,92 @@ public sealed class JobToolTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task UnitTestOfAWorkspaceWithoutNoE2eIsRefusedWithoutAJobAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            name: ToolNames.TEST,
+            arguments: Arguments(("package", SampleWorkspace.CORE))
+        );
+
+        Assert.True(condition: result.IsError, userMessage: "unit never runs a workspace's test script");
+        Assert.Equal(expected: TestTool.NO_UNIT_SCRIPT, actual: Text(result));
+        Assert.Empty(this._runner.Started);
+    }
+
+    [Fact]
+    public async Task AllScopeTestOfAWorkspaceRunsItsTestScriptAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            name: ToolNames.TEST,
+            arguments: Arguments(("package", SampleWorkspace.CORE), ("scope", TestScripts.SCOPE_ALL))
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Equal(
+            expected: ["run", "test", "--workspace=packages/core"],
+            actual: Assert.Single(this._runner.Started).Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task UnitTestOfAWorkspaceRunsTheInstallRootNoE2eForItsDirectoryAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            repository: SampleWorkspace.Create(
+                repositoryRoot: this._repository.Path,
+                rootScripts: [NodeScripts.TEST, NodeScripts.TEST_NO_E2E]
+            ),
+            name: ToolNames.TEST,
+            arguments: Arguments(("package", SampleWorkspace.CORE))
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        ProcessStep step = definition.Steps[^1];
+        Assert.Equal(
+            expected: ["run", "test:noe2e", "--", "packages/core"],
+            actual: step.Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(expected: this._repository.Path, actual: step.WorkingDirectory);
+        Assert.Equal(
+            expected: ["restore .", "test:noe2e " + SampleWorkspace.ROOT_NAME + " packages/core"],
+            actual: definition.Steps.Select(static step => step.Name),
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task UnitTestOfAllWithNothingToRunIsRefusedWithoutAJobAsync()
+    {
+        NodeRepository repository = new(
+            RepositoryRoot: this._repository.Path,
+            InstallRoots: [new NodeInstallRoot(RelativeDirectory: ".", LockFile: "package-lock.json")],
+            Packages:
+            [
+                new NodePackage(Name: "root", RelativeDirectory: ".", Scripts: []),
+                new NodePackage(Name: "app", RelativeDirectory: "packages/app", Scripts: [NodeScripts.TEST]),
+            ],
+            Timeout: TimeSpan.FromMinutes(5)
+        );
+
+        CallToolResult result = await this.CallAsync(
+            repository: repository,
+            name: ToolNames.TEST,
+            arguments: Arguments()
+        );
+
+        Assert.True(condition: result.IsError, userMessage: "nothing runs under unit");
+        Assert.Contains(
+            expectedSubstring: "No package has the script",
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
+        Assert.Empty(this._runner.Started);
+    }
+
+    [Fact]
     public async Task TestRejectsAPackageThatIsNotDetectedAsync()
     {
         CallToolResult result = await this.CallAsync(name: ToolNames.TEST, arguments: Arguments(("package", "nope")));
@@ -316,7 +402,31 @@ public sealed class JobToolTests : TestBase, IDisposable
 
     private ValueTask<CallToolResult> CallAsync(string name, Dictionary<string, JsonElement> arguments, NpmLocator npm)
     {
-        NodeDetection detection = TestTools.Detected(SampleWorkspace.Create(this._repository.Path));
+        return this.CallAsync(
+            repository: SampleWorkspace.Create(this._repository.Path),
+            name: name,
+            arguments: arguments,
+            npm: npm
+        );
+    }
+
+    private ValueTask<CallToolResult> CallAsync(
+        NodeRepository repository,
+        string name,
+        Dictionary<string, JsonElement> arguments
+    )
+    {
+        return this.CallAsync(repository: repository, name: name, arguments: arguments, npm: TestTools.FakeNpm);
+    }
+
+    private ValueTask<CallToolResult> CallAsync(
+        NodeRepository repository,
+        string name,
+        Dictionary<string, JsonElement> arguments,
+        NpmLocator npm
+    )
+    {
+        NodeDetection detection = TestTools.Detected(repository);
         BuildTool tool = TestTools.Find(
             tools: TestTools.Catalog(detection: detection, runner: this._runner, npm: npm),
             name: name

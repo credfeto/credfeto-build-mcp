@@ -77,12 +77,28 @@ public static class NpmCommands
     // --workspace so the workspace's scripts see the shared node_modules
     public static ProcessStep RunScript(NodeRepository repository, NodePackage package, string script, string npm)
     {
+        return RunScript(repository: repository, run: new(Package: package, Script: script), npm: npm);
+    }
+
+    // A path filter follows --, so npm hands it to the script's runner instead of reading it as one of its own options
+    public static ProcessStep RunScript(NodeRepository repository, ScriptRun run, string npm)
+    {
         return Step(
-            name: script + " " + package.Name,
+            name: run.PathFilter is null
+                ? run.Script + " " + run.Package.Name
+                : run.Script + " " + run.Package.Name + " " + run.PathFilter,
             npm: npm,
-            workingDirectory: FullPath(repository: repository, relativeDirectory: package.InstallRoot),
-            arguments: ["run", script, .. WorkspaceArguments(package)]
+            workingDirectory: FullPath(repository: repository, relativeDirectory: run.Package.InstallRoot),
+            arguments: ["run", run.Script, .. WorkspaceArguments(run.Package), .. PathFilterArguments(run.PathFilter)]
         );
+    }
+
+    // The package's directory relative to its install root, as --workspace and a runner's path filter take it
+    public static string DirectoryInInstallRoot(NodePackage package)
+    {
+        return StringComparer.Ordinal.Equals(x: package.InstallRoot, y: NodePackage.ROOT_DIRECTORY)
+            ? package.RelativeDirectory
+            : package.RelativeDirectory[(package.InstallRoot.Length + 1)..];
     }
 
     // npm install <spec> into one package, saving it to the given section and updating the lock file
@@ -132,11 +148,12 @@ public static class NpmCommands
             return [];
         }
 
-        string relative = StringComparer.Ordinal.Equals(x: package.InstallRoot, y: NodePackage.ROOT_DIRECTORY)
-            ? package.RelativeDirectory
-            : package.RelativeDirectory[(package.InstallRoot.Length + 1)..];
+        return [WORKSPACE_SWITCH + DirectoryInInstallRoot(package)];
+    }
 
-        return [WORKSPACE_SWITCH + relative];
+    private static IReadOnlyList<string> PathFilterArguments(string? pathFilter)
+    {
+        return pathFilter is null ? [] : ["--", pathFilter];
     }
 
     private static string SaveOption(DependencySection section)

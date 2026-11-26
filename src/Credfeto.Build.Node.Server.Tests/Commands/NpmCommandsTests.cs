@@ -91,6 +91,29 @@ public sealed class NpmCommandsTests : TestBase
     }
 
     [Fact]
+    public void APathFilterFollowsTheScriptFromTheInstallRoot()
+    {
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
+
+        ProcessStep step = NpmCommands.RunScript(
+            repository: repository,
+            run: new ScriptRun(Package: repository.Packages[0], Script: NodeScripts.TEST_NO_E2E)
+            {
+                PathFilter = "packages/core",
+            },
+            npm: NPM
+        );
+
+        Assert.Equal(
+            expected: ["run", "test:noe2e", "--", "packages/core"],
+            actual: step.Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(expected: ROOT, actual: step.WorkingDirectory);
+        Assert.Equal(expected: "test:noe2e " + SampleWorkspace.ROOT_NAME + " packages/core", actual: step.Name);
+    }
+
+    [Fact]
     public void AWorkspaceUnderTheSourceInstallRootIsRelativeToIt()
     {
         NodeRepository repository = new(

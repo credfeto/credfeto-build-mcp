@@ -16,8 +16,20 @@ internal static class JobSteps
         string npm
     )
     {
-        IEnumerable<ProcessStep> installs = targets
-            .Select(static target => target.Package.InstallRoot)
+        return ForRuns(
+            repository: repository,
+            runs: [.. targets.Select(static target => new ScriptRun(Package: target.Package, Script: target.Script))],
+            npm: npm
+        );
+    }
+
+    public static IReadOnlyList<ProcessStep> ForRuns(
+        NodeRepository repository,
+        IReadOnlyList<ScriptRun> runs,
+        string npm
+    )
+    {
+        IEnumerable<ProcessStep> installs = runs.Select(static run => run.Package.InstallRoot)
             .Distinct(StringComparer.Ordinal)
             .SelectMany(installRoot =>
                 NpmCommands.InstallIfNeeded(
@@ -27,12 +39,6 @@ internal static class JobSteps
                 )
             );
 
-        return
-        [
-            .. installs,
-            .. targets.Select(target =>
-                NpmCommands.RunScript(repository: repository, package: target.Package, script: target.Script, npm: npm)
-            ),
-        ];
+        return [.. installs, .. runs.Select(run => NpmCommands.RunScript(repository: repository, run: run, npm: npm))];
     }
 }

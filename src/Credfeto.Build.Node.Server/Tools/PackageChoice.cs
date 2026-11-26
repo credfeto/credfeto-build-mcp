@@ -13,6 +13,8 @@ internal static class PackageChoice
 {
     public const string NAME = "package";
 
+    public const string NO_SCRIPT = "No package has the script this tool runs any more";
+
     public static SchemaProperty Property(IReadOnlyList<string> choices, string description)
     {
         return new(
@@ -33,19 +35,27 @@ internal static class PackageChoice
         Func<NodePackage, string?> script
     )
     {
-        string choice = arguments.GetChoice(
-            property: property,
-            allowed: ScriptTargets.Choices(repository: repository, script: script)
-        ) ?? ScriptTargets.ALL;
         IReadOnlyList<(NodePackage Package, string Script)> targets = ScriptTargets.Select(
             repository: repository,
-            choice: choice,
+            choice: Choice(arguments: arguments, property: property, repository: repository, script: script),
             script: script
         );
 
-        return targets.Count != 0
-            ? targets
-            : throw new ToolUnavailableException("No package has the script this tool runs any more");
+        return targets.Count != 0 ? targets : throw new ToolUnavailableException(NO_SCRIPT);
+    }
+
+    // The package chosen, all by default, checked against the packages that have the script now
+    public static string Choice(
+        ToolArguments arguments,
+        SchemaProperty property,
+        NodeRepository repository,
+        Func<NodePackage, string?> script
+    )
+    {
+        return arguments.GetChoice(
+            property: property,
+            allowed: ScriptTargets.Choices(repository: repository, script: script)
+        ) ?? ScriptTargets.ALL;
     }
 
     public static NodeInstallRoot InstallRootOf(NodeRepository repository, string installRoot)
