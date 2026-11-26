@@ -62,6 +62,18 @@ public sealed partial class BuildToolTests : TestBase
         Required: false
     );
 
+    private static readonly SchemaProperty Names = new(
+        Name: "names",
+        Description: "Some names",
+        Values: null,
+        Pattern: PACKAGE_PATTERN,
+        DefaultValue: null,
+        Required: false
+    )
+    {
+        StringArray = true,
+    };
+
     private static readonly SchemaProperty Id = new(
         Name: "id",
         Description: "A job id",
@@ -127,7 +139,7 @@ public sealed partial class BuildToolTests : TestBase
         "Invalid value for package_id; expected a value matching " + PACKAGE_PATTERN
     )]
     [InlineData("id", JOB_ID + "\n", "Invalid value for id; expected a job id from a previous call")]
-    [InlineData("unknown", "x", "Unknown parameter; this tool takes: scope, verbose, count, package_id, id")]
+    [InlineData("unknown", "x", "Unknown parameter; this tool takes: scope, verbose, count, package_id, names, id")]
     public async Task InvalidArgumentsAreToolErrorsWithFixedTextAsync(string name, string value, string message)
     {
         CallToolResult result = await this.ResultAsync(
@@ -137,6 +149,47 @@ public sealed partial class BuildToolTests : TestBase
 
         Assert.True(condition: result.IsError, userMessage: name + " accepted " + value);
         Assert.Equal(expected: message, actual: Arguments.Answer(result));
+    }
+
+    [Fact]
+    public async Task AnAbsentListIsEmptyAsync()
+    {
+        string answer = await this.CallAsync(arguments: Arguments.None(), execute: static arguments =>
+            Read(arguments: arguments, name: "names")
+        );
+
+        Assert.Equal(expected: string.Empty, actual: answer);
+    }
+
+    [Fact]
+    public async Task PassedListsAreReturnedInOrderAsync()
+    {
+        string answer = await this.CallAsync(
+            arguments: Arguments.Strings("names", "Beta", "Alpha"),
+            execute: static arguments => Read(arguments: arguments, name: "names")
+        );
+
+        Assert.Equal(expected: "Beta,Alpha", actual: answer);
+    }
+
+    [Theory]
+    [InlineData("\"Alpha\"")]
+    [InlineData("[1]")]
+    [InlineData("[\"Alpha\", null]")]
+    [InlineData("[\"Alpha\", \"Beta\\n\"]")]
+    [InlineData("[\"\"]")]
+    public async Task AListThatIsNotAllMatchingStringsIsRefusedAsync(string json)
+    {
+        CallToolResult result = await this.ResultAsync(
+            arguments: Arguments.Json(name: "names", json: json),
+            execute: static arguments => Read(arguments: arguments, name: "names")
+        );
+
+        Assert.True(condition: result.IsError, userMessage: "names accepted " + json);
+        Assert.Equal(
+            expected: "Invalid value for names; expected a list of values matching " + PACKAGE_PATTERN,
+            actual: Arguments.Answer(result)
+        );
     }
 
     [Fact]
@@ -229,7 +282,7 @@ public sealed partial class BuildToolTests : TestBase
         Func<ToolArguments, string> execute
     )
     {
-        EchoTool tool = new(schema: [Scope, Verbose, Count, Package, Id], execute: execute);
+        EchoTool tool = new(schema: [Scope, Verbose, Count, Package, Names, Id], execute: execute);
 
         return tool.CallAsync(arguments: arguments, cancellationToken: this.CancellationToken());
     }
@@ -243,6 +296,7 @@ public sealed partial class BuildToolTests : TestBase
             "count" => arguments.GetInteger(Count).ToString(CultureInfo.InvariantCulture),
             "package_id" => arguments.GetMatching(property: Package, pattern: PackageId()),
             "id" => arguments.GetJobId(Id),
+            "names" => string.Join(separator: ',', values: arguments.GetStrings(property: Names, pattern: PackageId())),
             _ => "ran",
         };
     }

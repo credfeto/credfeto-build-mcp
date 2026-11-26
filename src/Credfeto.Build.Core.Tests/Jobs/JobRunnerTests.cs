@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Coverage;
 using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Core.Jobs.Exceptions;
 using Credfeto.Build.Core.Jobs.Services;
+using Credfeto.Build.Core.Json;
 using Credfeto.Build.Core.Tests.Coverage;
 using Credfeto.Build.Core.Tests.Helpers;
 using Credfeto.Build.Testing;
@@ -510,6 +512,27 @@ public sealed class JobRunnerTests : TestBase, IDisposable
         JobResult result = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
 
         Assert.Null(result.ChangedFiles);
+        Assert.Null(result.Note);
+    }
+
+    [Fact]
+    public async Task TheDefinitionsNoteIsInTheResultAsync()
+    {
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            Definition(continueOnFailure: false, parser: null, "a") with
+            {
+                Note = "the filter may have been ignored",
+            }
+        );
+
+        Assert.Equal(expected: "the filter may have been ignored", actual: result.Note);
+        Assert.Contains(
+            expectedSubstring: "\"note\":\"the filter may have been ignored\"",
+            actualString: JsonSerializer.Serialize(value: result, jsonTypeInfo: CoreJsonContext.Default.JobResult),
+            comparisonType: StringComparison.Ordinal
+        );
     }
 
     [Fact]

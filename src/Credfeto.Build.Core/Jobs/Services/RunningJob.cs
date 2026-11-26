@@ -215,7 +215,10 @@ internal sealed class RunningJob : IAsyncDisposable
                 ChangedFiles: this._changedFiles,
                 CoverageReportPath: this._coverageReportPath,
                 CoverageReportNote: this._coverageReportNote
-            );
+            )
+            {
+                Note = this.Definition.Note,
+            };
         }
     }
 

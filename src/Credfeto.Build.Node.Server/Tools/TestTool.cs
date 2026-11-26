@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Credfeto.Build.Core.Coverage;
 using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Testing;
@@ -25,6 +26,30 @@ public sealed class TestTool : BuildTool
         Required: false
     );
 
+    private static readonly SchemaProperty Paths = new(
+        Name: "paths",
+        Description: "Test files, or the runner's own filter patterns, to run instead of the whole script, handed to the test runner after --. They are relative to the directory the script runs in: the install root when a workspace package runs its install root's test:noe2e, where they replace the package's directory filter. Each may hold only letters, digits and _ . @ + * / -, and may not start with - or /, nor have a .. segment",
+        Values: null,
+        Pattern: TestFilter.PATH_PATTERN,
+        DefaultValue: null,
+        Required: false
+    )
+    {
+        StringArray = true,
+    };
+
+    private static readonly SchemaProperty Coverage = new(
+        Name: "coverage",
+        Description: "Passes the test runner's coverage switch: --coverage to Vitest and Jest, --experimental-test-coverage to node --test",
+        Values: null,
+        Pattern: null,
+        DefaultValue: SchemaProperty.FALSE,
+        Required: false
+    )
+    {
+        Flag = true,
+    };
+
     private readonly ToolContext _context;
     private readonly SchemaProperty _package;
 
@@ -43,8 +68,8 @@ public sealed class TestTool : BuildTool
         : base(
             name: ToolNames.TEST,
             title: "Run npm tests",
-            description: "Starts a job that runs the test script of the package chosen in package with CI=true, installing first when node_modules is missing or older than the lock file. scope unit (the default) runs test:noe2e, as the pre-commit hook does: a workspace package without its own runs its install root's test:noe2e from the install root with the package's directory after --, and is refused with no job started when the install root's package has none either; only an install root's own package falls back to test. all prefers test; node.testScript in .ai/commands.json replaces the choice for packages that have it. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. Returns the job id at once; call job_result to wait for its outcome, with pass/fail counts and failing test names for Vitest, Jest and node --test",
-            schema: [Scope, package],
+            description: "Starts a job that runs the test script of the package chosen in package with CI=true, installing first when node_modules is missing or older than the lock file. scope unit (the default) runs test:noe2e, as the pre-commit hook does: a workspace package without its own runs its install root's test:noe2e from the install root with the package's directory after --, and is refused with no job started when the install root's package has none either; only an install root's own package falls back to test. all prefers test; node.testScript in .ai/commands.json replaces the choice for packages that have it. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. paths limits the run to those test files and coverage passes the runner's coverage switch; when a package's runner is not known, job_result carries a note that they may have been ignored. Returns the job id at once; call job_result to wait for its outcome, with pass/fail counts and failing test names for Vitest, Jest and node --test",
+            schema: [Scope, package, Paths, Coverage],
             readOnly: false
         )
     {
@@ -64,6 +89,8 @@ public sealed class TestTool : BuildTool
     )
     {
         string scope = arguments.GetChoice(Scope) ?? TestScripts.SCOPE_UNIT;
+        IReadOnlyList<string> paths = arguments.GetStrings(property: Paths, pattern: TestFilter.Path());
+        bool coverage = arguments.GetFlag(Coverage);
         NodeRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
         string npm = this._context.Npm.Require();
         string choice = PackageChoice.Choice(
@@ -72,7 +99,11 @@ public sealed class TestTool : BuildTool
             repository: repository,
             script: package => AnyTestScript(repository: repository, package: package)
         );
-        IReadOnlyList<ScriptRun> runs = Runs(repository: repository, choice: choice, scope: scope);
+        IReadOnlyList<ScriptRun> runs =
+        [
+            .. Runs(repository: repository, choice: choice, scope: scope)
+                .Select(run => TestFilter.Apply(run: run, paths: paths, coverage: coverage)),
+        ];
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
@@ -81,8 +112,9 @@ public sealed class TestTool : BuildTool
             kind: ToolNames.TEST,
             steps: JobSteps.ForRuns(repository: repository, runs: runs, npm: npm),
             testParser: CompositeTestOutputParser.For(runs.Select(static run => run.Package.TestRunner)),
-            coverageFiles: [],
+            coverage: new(Files: [], ReportPath: null, Language: CoverageLanguage.Node, Components: null),
             changedFiles: null,
+            note: TestFilter.Note(runs: runs, paths: paths, coverage: coverage),
             cancellationToken: cancellationToken
         );
     }

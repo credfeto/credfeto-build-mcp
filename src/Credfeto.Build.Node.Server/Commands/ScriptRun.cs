@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Diagnostics;
 using Credfeto.Build.Node.Server.Detection;
 
@@ -10,4 +11,7 @@ namespace Credfeto.Build.Node.Server.Commands;
 public sealed record ScriptRun(NodePackage Package, string Script)
 {
     public string? PathFilter { get; init; }
+
+    // Handed to the script's runner ahead of any path filter
+    public IReadOnlyList<string> RunnerArguments { get; init; } = [];
 }

@@ -328,8 +328,8 @@ restores, builds, lints, tests and measures coverage for them, and adds or updat
   `build`, `lint`, `test`, `test:noe2e` and `test:coverage` scripts it has, and the dependencies it declares in
   `dependencies`, `devDependencies` and `optionalDependencies` are recorded.
 - **Test runner:** Vitest, Jest or `node --test`, from the first word of the package's test script (after any
-  `VAR=value` assignments), otherwise from a `vitest` or `jest` dependency. It is used only to read the test output;
-  an unknown runner reports exit codes alone.
+  `VAR=value` assignments), otherwise from a `vitest` or `jest` dependency. It is used to read the test output and to
+  pick the `test` tool's coverage switch; an unknown runner reports exit codes alone and gets no coverage switch.
 - **Limits:** each `package.json` is read up to 1 MiB, and a file that is larger, or that is not a JSON object, is
   reported.
 - **Overrides:** the `node` section of `.ai/commands.json` applies `enabled`, `packages` (narrows the detected
@@ -361,7 +361,7 @@ watched directory, or by the next `detect` call, which always detects afresh.
 | `job_result`, `job_status` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
 | `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
 | `restore` | none | `npm ci --ignore-scripts --no-audit --no-fund` in every install root. The only install path. |
-| `test` | `scope` (`unit` default, `all`), `package` | `unit` runs `test:noe2e` (as the pre-commit hook does): the package's own, otherwise its install root's `test:noe2e`, run from the install root with the package's directory after `--` as the runner's path filter. A workspace package with neither is refused with no job started; only an install root's own package without `test:noe2e` falls back to `test`. `all` runs `test`. `node.testScript` replaces the choice. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
+| `test` | `scope` (`unit` default, `all`), `package`, `paths` (optional list), `coverage` (`false` default) | `unit` runs `test:noe2e` (as the pre-commit hook does): the package's own, otherwise its install root's `test:noe2e`, run from the install root with the package's directory after `--` as the runner's path filter. A workspace package with neither is refused with no job started; only an install root's own package without `test:noe2e` falls back to `test`. `all` runs `test`. `node.testScript` replaces the choice. `paths` and `coverage` narrow and measure a run; see Test paths and coverage below. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
 | `update_package` | `package_id`, `version` (optional, `latest` when left out), `package` (`all` default) | `npm install <id>@<version>` in each chosen package whose `package.json` declares it, keeping its section, then lists the version installed. |
 
 Every tool except `detect`, `job_status` and `job_result` starts a job and returns its id at once.
@@ -379,6 +379,23 @@ Every tool except `detect`, `job_status` and `job_result` starts a job and retur
 - **Package tools:** `package_id` must be an npm registry name and `version` a version, range or dist-tag, both
   matched against fixed patterns, so no URL, path, git or alias specification reaches npm. Every install passes
   `--ignore-scripts`.
+
+### Test paths and coverage
+
+The `test` tool's `paths` and `coverage` are handed to the test runner after `--`, as
+`npm run <script> [--workspace=<directory>] -- [<coverage switch>] [<paths>...]`. With neither, the run is unchanged.
+
+- **`paths`:** test files, or the runner's own filter patterns (Jest and Vitest match them against file paths), relative to the directory the script runs in: the package's directory for its own
+  script, or the install root when a workspace package runs its install root's `test:noe2e`, where they replace the
+  package's directory filter. npm runs a script through a shell, so each path may hold only letters, digits and
+  `_ . @ + * / -`, and may not start with `-` or `/`, nor have a `..` segment; any other path refuses the call with no
+  job started.
+- **`coverage`:** passes the runner's own coverage switch and nothing else: `--coverage` for Vitest and Jest,
+  `--experimental-test-coverage` for `node --test`. No report is read; the `coverage` tool does that. With `coverage`
+  alone the package's directory filter is kept.
+- **Unknown runner:** a package whose runner is not known gets the paths but no coverage switch, and the job's
+  `job_result` carries a `note` saying so, since its script may ignore what it is given. A `bun test` script with no
+  `vitest` or `jest` dependency counts as unknown.
 
 ### Node coverage
 

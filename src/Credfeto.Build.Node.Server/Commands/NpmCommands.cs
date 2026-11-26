@@ -80,7 +80,8 @@ public static class NpmCommands
         return RunScript(repository: repository, run: new(Package: package, Script: script), npm: npm);
     }
 
-    // A path filter follows --, so npm hands it to the script's runner instead of reading it as one of its own options
+    // Runner arguments and a path filter follow --, so npm hands them to the script's runner instead of reading them
+    // as its own options
     public static ProcessStep RunScript(NodeRepository repository, ScriptRun run, string npm)
     {
         return Step(
@@ -89,7 +90,7 @@ public static class NpmCommands
                 : run.Script + " " + run.Package.Name + " " + run.PathFilter,
             npm: npm,
             workingDirectory: FullPath(repository: repository, relativeDirectory: run.Package.InstallRoot),
-            arguments: ["run", run.Script, .. WorkspaceArguments(run.Package), .. PathFilterArguments(run.PathFilter)]
+            arguments: ["run", run.Script, .. WorkspaceArguments(run.Package), .. RunnerArguments(run)]
         );
     }
 
@@ -151,9 +152,13 @@ public static class NpmCommands
         return [WORKSPACE_SWITCH + DirectoryInInstallRoot(package)];
     }
 
-    private static IReadOnlyList<string> PathFilterArguments(string? pathFilter)
+    private static IReadOnlyList<string> RunnerArguments(ScriptRun run)
     {
-        return pathFilter is null ? [] : ["--", pathFilter];
+        IReadOnlyList<string> arguments = run.PathFilter is null
+            ? run.RunnerArguments
+            : [.. run.RunnerArguments, run.PathFilter];
+
+        return arguments.Count == 0 ? [] : ["--", .. arguments];
     }
 
     private static string SaveOption(DependencySection section)
