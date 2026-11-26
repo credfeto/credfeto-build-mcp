@@ -208,6 +208,108 @@ public sealed class JobToolTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task TestPathsAreHandedToTheRunnerAsync()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(("package", SampleWorkspace.WEB));
+        arguments["paths"] = Paths("src/a.test.ts", "src/b.test.ts");
+
+        CallToolResult result = await this.CallAsync(name: ToolNames.TEST, arguments: arguments);
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(
+            expected: ["run", "test:noe2e", "--workspace=packages/web", "--", "src/a.test.ts", "src/b.test.ts"],
+            actual: definition.Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Null(definition.Note);
+    }
+
+    [Fact]
+    public async Task TestCoverageKeepsTheInstallRootDirectoryFilterAsync()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(("package", SampleWorkspace.CORE));
+        arguments["coverage"] = JsonSerializer.SerializeToElement(
+            value: true,
+            jsonTypeInfo: TestJsonContext.Default.Boolean
+        );
+
+        CallToolResult result = await this.CallAsync(
+            repository: SampleWorkspace.Create(
+                repositoryRoot: this._repository.Path,
+                rootScripts: [NodeScripts.TEST, NodeScripts.TEST_NO_E2E]
+            ),
+            name: ToolNames.TEST,
+            arguments: arguments
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Equal(
+            expected: ["run", "test:noe2e", "--", "--coverage", "packages/core"],
+            actual: Assert.Single(this._runner.Started).Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task TestRefusesAnUnsafePathWithoutAJobAsync()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(("package", SampleWorkspace.WEB));
+        arguments["paths"] = Paths("src/a.test.ts", "../secret.test.ts");
+
+        CallToolResult result = await this.CallAsync(name: ToolNames.TEST, arguments: arguments);
+
+        Assert.True(condition: result.IsError, userMessage: "a path climbing out is refused");
+        Assert.Contains(
+            expectedSubstring: "Invalid value for paths",
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
+        Assert.Empty(this._runner.Started);
+    }
+
+    [Fact]
+    public async Task TestOfAnUnknownRunnerWithPathsCarriesANoteAsync()
+    {
+        NodeRepository repository = new(
+            RepositoryRoot: this._repository.Path,
+            InstallRoots: [new NodeInstallRoot(RelativeDirectory: ".", LockFile: "package-lock.json")],
+            Packages:
+            [
+                new NodePackage(Name: "app", RelativeDirectory: ".", Scripts: [NodeScripts.TEST])
+                {
+                    ScriptNames = [NodeScripts.TEST],
+                },
+            ],
+            Timeout: TimeSpan.FromMinutes(5)
+        );
+        Dictionary<string, JsonElement> arguments = Arguments(("scope", TestScripts.SCOPE_ALL));
+        arguments["paths"] = Paths("a.test.js");
+        arguments["coverage"] = JsonSerializer.SerializeToElement(
+            value: true,
+            jsonTypeInfo: TestJsonContext.Default.Boolean
+        );
+
+        CallToolResult result = await this.CallAsync(
+            repository: repository,
+            name: ToolNames.TEST,
+            arguments: arguments
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(
+            expected: ["run", "test", "--", "a.test.js"],
+            actual: definition.Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: "The test runner of app is not known, so the paths were passed to its test script after -- and may have been ignored, and no coverage switch was passed",
+            actual: definition.Note
+        );
+    }
+
+    [Fact]
     public async Task TestRejectsAPackageThatIsNotDetectedAsync()
     {
         CallToolResult result = await this.CallAsync(name: ToolNames.TEST, arguments: Arguments(("package", "nope")));
@@ -448,6 +550,11 @@ public sealed class JobToolTests : TestBase, IDisposable
         }
 
         return arguments;
+    }
+
+    private static JsonElement Paths(params string[] paths)
+    {
+        return JsonSerializer.SerializeToElement(value: paths, jsonTypeInfo: TestJsonContext.Default.StringArray);
     }
 
     private static string Text(CallToolResult result)

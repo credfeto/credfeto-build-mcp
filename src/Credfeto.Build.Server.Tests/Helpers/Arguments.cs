@@ -38,6 +38,24 @@ internal static class Arguments
         };
     }
 
+    public static Dictionary<string, JsonElement> Strings(string name, params string[] values)
+    {
+        return new(StringComparer.Ordinal)
+        {
+            [name] = JsonSerializer.SerializeToElement(
+                value: values,
+                jsonTypeInfo: TestJsonContext.Default.StringArray
+            ),
+        };
+    }
+
+    public static Dictionary<string, JsonElement> Json(string name, string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+
+        return new(StringComparer.Ordinal) { [name] = document.RootElement.Clone() };
+    }
+
     public static string Answer(CallToolResult result)
     {
         return Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text;
