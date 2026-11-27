@@ -10,6 +10,7 @@ public static class NodeScripts
     public const string TEST = "test";
     public const string TEST_NO_E2E = "test:noe2e";
     public const string TEST_COVERAGE = "test:coverage";
+    public const string TYPECHECK = "typecheck";
 
-    public static IReadOnlyList<string> Known { get; } = [BUILD, LINT, TEST, TEST_NO_E2E, TEST_COVERAGE];
+    public static IReadOnlyList<string> Known { get; } = [BUILD, LINT, TEST, TEST_NO_E2E, TEST_COVERAGE, TYPECHECK];
 }

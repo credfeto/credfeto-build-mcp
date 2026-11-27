@@ -15,6 +15,8 @@ public static class NpmCommands
     // npm writes this after every install; a lock file newer than it means node_modules is out of date
     public const string INSTALLED_LOCK_FILE = ".package-lock.json";
 
+    public const string TSC = "tsc";
+
     private const string WORKSPACE_SWITCH = "--workspace=";
 
     private static readonly IReadOnlyList<string> QuietInstallOptions = ["--ignore-scripts", "--no-audit", "--no-fund"];
@@ -91,6 +93,23 @@ public static class NpmCommands
             npm: npm,
             workingDirectory: FullPath(repository: repository, relativeDirectory: run.Package.InstallRoot),
             arguments: ["run", run.Script, .. WorkspaceArguments(run.Package), .. RunnerArguments(run)]
+        );
+    }
+
+    // tsc --noEmit against the package's own tsconfig.json, run from the package directory. Only the locally installed
+    // tsc is run: the package's own when it has one, otherwise the one hoisted into its install root's node_modules
+    public static ProcessStep TypeCheck(NodeRepository repository, NodePackage package)
+    {
+        string packageTsc = LocalTsc(FullPath(repository: repository, relativeDirectory: package.RelativeDirectory));
+
+        return new(
+            Name: TSC + " " + package.Name,
+            FileName: File.Exists(packageTsc)
+                ? packageTsc
+                : LocalTsc(FullPath(repository: repository, relativeDirectory: package.InstallRoot)),
+            Arguments: ["--noEmit", "-p", NodePackage.TS_CONFIG_FILE_NAME],
+            WorkingDirectory: FullPath(repository: repository, relativeDirectory: package.RelativeDirectory),
+            Environment: Environment
         );
     }
 
@@ -179,6 +198,11 @@ public static class NpmCommands
                 path1: repository.RepositoryRoot,
                 path2: relativeDirectory.Replace(oldChar: '/', newChar: Path.DirectorySeparatorChar)
             );
+    }
+
+    private static string LocalTsc(string directory)
+    {
+        return Path.Combine(path1: directory, path2: NODE_MODULES, path3: ".bin", path4: TSC);
     }
 
     private static ProcessStep Step(string name, string npm, string workingDirectory, IReadOnlyList<string> arguments)

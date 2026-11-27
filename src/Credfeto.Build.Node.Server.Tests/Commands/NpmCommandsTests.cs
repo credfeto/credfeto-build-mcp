@@ -114,6 +114,69 @@ public sealed class NpmCommandsTests : TestBase
     }
 
     [Fact]
+    public void RunnerArgumentsFollowTheScriptAsSeparateArguments()
+    {
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
+
+        ProcessStep step = NpmCommands.RunScript(
+            repository: repository,
+            run: new ScriptRun(Package: repository.Packages[1], Script: NodeScripts.BUILD)
+            {
+                RunnerArguments = ["--target", "handler"],
+            },
+            npm: NPM
+        );
+
+        Assert.Equal(
+            expected: ["run", "build", "--workspace=packages/web", "--", "--target", "handler"],
+            actual: step.Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(expected: "build " + SampleWorkspace.WEB, actual: step.Name);
+    }
+
+    [Fact]
+    public void TypeCheckRunsTheInstallRootTscWhenThePackageHasNoneOfItsOwn()
+    {
+        NodeRepository repository = SampleWorkspace.Create(ROOT);
+
+        ProcessStep step = NpmCommands.TypeCheck(repository: repository, package: repository.Packages[1]);
+
+        Assert.Equal(
+            expected: Path.Combine(path1: ROOT, path2: NpmCommands.NODE_MODULES, path3: ".bin", path4: "tsc"),
+            actual: step.FileName
+        );
+        Assert.Equal(
+            expected: ["--noEmit", "-p", "tsconfig.json"],
+            actual: step.Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: Path.Combine(path1: ROOT, path2: "packages", path3: "web"),
+            actual: step.WorkingDirectory
+        );
+        Assert.Equal(expected: "tsc " + SampleWorkspace.WEB, actual: step.Name);
+        Assert.Equal(expected: "true", actual: step.Environment["CI"]);
+        Assert.False(condition: step.StopJobOnFailure, userMessage: "a type error is the result, not a stop");
+    }
+
+    [Fact]
+    public async Task TypeCheckPrefersThePackagesOwnTscAsync()
+    {
+        using TemporaryDirectory folder = new();
+        NodeRepository repository = SampleWorkspace.Create(folder.Path);
+        string tsc = await folder.WriteAsync(
+            relative: "packages/web/node_modules/.bin/tsc",
+            content: "",
+            cancellationToken: this.CancellationToken()
+        );
+
+        ProcessStep step = NpmCommands.TypeCheck(repository: repository, package: repository.Packages[1]);
+
+        Assert.Equal(expected: tsc, actual: step.FileName);
+    }
+
+    [Fact]
     public void AWorkspaceUnderTheSourceInstallRootIsRelativeToIt()
     {
         NodeRepository repository = new(

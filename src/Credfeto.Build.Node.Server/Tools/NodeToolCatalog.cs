@@ -7,8 +7,8 @@ namespace Credfeto.Build.Node.Server.Tools;
 
 public static class NodeToolCatalog
 {
-    // A tool for a script is offered only when some package has that script; coverage only when some package has a
-    // coverage script of its own (see CoverageScripts)
+    // A tool for a script is offered only when some package has that script; typecheck also when some package has a
+    // tsconfig.json; coverage only when some package has a coverage script of its own (see CoverageScripts)
     public static IReadOnlyList<McpServerTool> Create(NodeDetection detection, ToolContext context)
     {
         if (detection.Repository is not { } repository)
@@ -26,6 +26,11 @@ public static class NodeToolCatalog
         if (ScriptTool.Offered(repository: repository, script: NodeScripts.LINT))
         {
             tools.Add(ScriptTool.Lint(repository: repository, context: context));
+        }
+
+        if (TypeCheckTool.Offered(repository))
+        {
+            tools.Add(new TypeCheckTool(repository: repository, context: context));
         }
 
         if (TestTool.Offered(repository))

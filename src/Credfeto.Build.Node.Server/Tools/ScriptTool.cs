@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,8 +21,8 @@ public sealed class ScriptTool : BuildTool
             title: title,
             description: "Starts a job that runs npm run "
                 + script
-                + " for the package chosen in package, installing first when node_modules is missing or older than the lock file. A workspace package runs from its install root with --workspace. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. Returns the job id at once; call job_result to wait for its outcome",
-            schema: [package],
+                + " for the package chosen in package, installing first when node_modules is missing or older than the lock file. A workspace package runs from its install root with --workspace. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. args are handed to every script run after --. Returns the job id at once; call job_result to wait for its outcome",
+            schema: [package, ScriptArguments.Property],
             readOnly: false
         )
     {
@@ -51,25 +52,31 @@ public sealed class ScriptTool : BuildTool
         CancellationToken cancellationToken
     )
     {
+        IReadOnlyList<string> scriptArguments = arguments.GetStrings(
+            property: ScriptArguments.Property,
+            pattern: ScriptArguments.Argument()
+        );
         NodeRepository repository = await this._context.CurrentRepositoryAsync(cancellationToken);
         string npm = this._context.Npm.Require();
         string script = this._script;
+        IReadOnlyList<ScriptRun> runs =
+        [
+            .. PackageChoice
+                .Targets(arguments: arguments, property: this._package, repository: repository, script: package =>
+                    package.HasScript(script) ? script : null
+                )
+                .Select(target => new ScriptRun(Package: target.Package, Script: target.Script)
+                {
+                    RunnerArguments = scriptArguments,
+                }),
+        ];
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
             repositoryRoot: repository.RepositoryRoot,
             timeout: repository.Timeout,
             kind: script,
-            steps: JobSteps.ForScripts(
-                repository: repository,
-                targets: PackageChoice.Targets(
-                    arguments: arguments,
-                    property: this._package,
-                    repository: repository,
-                    script: package => package.HasScript(script) ? script : null
-                ),
-                npm: npm
-            ),
+            steps: JobSteps.ForRuns(repository: repository, runs: runs, npm: npm),
             testParser: null,
             coverageFiles: [],
             changedFiles: null,

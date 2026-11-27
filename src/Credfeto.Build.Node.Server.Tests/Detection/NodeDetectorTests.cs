@@ -36,6 +36,39 @@ public sealed class NodeDetectorTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task ATypecheckScriptAndATsConfigAreRecordedAsync()
+    {
+        await NpmRepository.WriteAsync(
+            repository: this._repository,
+            directory: "",
+            manifest: """{ "name": "example", "scripts": { "typecheck": "tsc --noEmit" } }""",
+            lockFile: NpmRepository.NPM_LOCK_FILE,
+            cancellationToken: this.CancellationToken()
+        );
+        _ = await this._repository.WriteAsync(
+            relative: "tsconfig.json",
+            content: "{}",
+            cancellationToken: this.CancellationToken()
+        );
+
+        NodePackage package = Assert.Single((await this.DetectRepositoryAsync()).Packages);
+
+        Assert.Equal(expected: ["typecheck"], actual: package.Scripts, comparer: StringComparer.Ordinal);
+        Assert.True(condition: package.HasTsConfig, userMessage: "the tsconfig.json beside package.json is seen");
+    }
+
+    [Fact]
+    public async Task APackageWithoutATsConfigHasNoneAsync()
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+
+        Assert.False(
+            condition: Assert.Single((await this.DetectRepositoryAsync()).Packages).HasTsConfig,
+            userMessage: "there is no tsconfig.json"
+        );
+    }
+
+    [Fact]
     public async Task APackageInSrcIsDetectedAsync()
     {
         await NpmRepository.WriteAsync(

@@ -13,6 +13,8 @@ public sealed record NodePackage(string Name, string RelativeDirectory, IReadOnl
 {
     public const string ROOT_DIRECTORY = ".";
 
+    public const string TS_CONFIG_FILE_NAME = "tsconfig.json";
+
     public string InstallRoot { get; init; } = ROOT_DIRECTORY;
 
     public IReadOnlyList<string> ScriptNames { get; init; } = [];
@@ -20,6 +22,9 @@ public sealed record NodePackage(string Name, string RelativeDirectory, IReadOnl
     public IReadOnlyList<NodeDependency> Dependencies { get; init; } = [];
 
     public NodeTestRunner TestRunner { get; init; }
+
+    // A tsconfig.json beside package.json lets typecheck fall back to tsc when the package has no typecheck script
+    public bool HasTsConfig { get; init; }
 
     // The root package of its install root, as opposed to one of its workspaces
     public bool IsInstallRoot => StringComparer.Ordinal.Equals(x: this.RelativeDirectory, y: this.InstallRoot);

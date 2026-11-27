@@ -50,13 +50,13 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
         return this._workspace.IsTransientFailure(exception);
     }
 
-    // Package manifests, lock files and the overrides file decide what detection finds. Only the listed directories
+    // Package manifests, tsconfig files, lock files and the overrides file decide what detection finds. Only the listed directories
     // are watched, each on its own: a recursive watch would add one kernel watch per directory of node_modules
     public static WatchFilter WatchFilterFor(NodeDetection detection)
     {
         return new(Extensions: [], IgnoredDirectories: [WorkspacePattern.IGNORED_DIRECTORY, ".git"])
         {
-            FileNames = [PackageManifestReader.FILE_NAME, .. LockFiles.FileNames],
+            FileNames = [PackageManifestReader.FILE_NAME, NodePackage.TS_CONFIG_FILE_NAME, .. LockFiles.FileNames],
             Recursive = false,
             Directories = detection.WatchedDirectories,
         };
@@ -109,6 +109,7 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
                 .Append('|')
                 .Append(hasTestScript ? '1' : '0')
                 .Append(hasCoverageScript ? '1' : '0')
+                .Append(package.HasTsConfig ? '1' : '0')
                 .Append('\n');
         }
 

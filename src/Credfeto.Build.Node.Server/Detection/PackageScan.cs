@@ -137,6 +137,9 @@ internal sealed class PackageScan
                 ScriptNames = manifest.ScriptNames,
                 Dependencies = manifest.Dependencies,
                 TestRunner = manifest.TestRunner,
+                HasTsConfig = File.Exists(
+                    Path.Combine(path1: this.FullPath(relativeDirectory), path2: NodePackage.TS_CONFIG_FILE_NAME)
+                ),
             }
         );
 
