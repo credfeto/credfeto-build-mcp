@@ -13,7 +13,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Added
 ### Fixed
 ### Changed
-- Node test and coverage jobs size Jest/Vitest workers from the container memory limit as well as CPU count (#69)
+- Node test and coverage cap Jest/Vitest workers to the memory limit; memoryPerWorkerMb override (#69)
 ### Deprecated
 ### Removed
 ### Deployment Changes
@@ -24,80 +24,80 @@ Releases that have at least been deployed to staging, BUT NOT necessarily releas
 
 ## [0.0.11] - 2026-11-27
 ### Added
-- The Python server (`credfeto-build-python`, MCP server `build-python`), a Native AOT dotnet tool: strict detection of `pyproject.toml` (`[project]` table) and `requirements*.txt` projects at the root, in `src/` and in `python.projects` directories, pip or uv (with `uv.lock`) with poetry, pipenv and pdm reported as unsupported, a `detect` tool (also offered when a repository has Python test files but no manifest), a non-recursive repository watch, `--self-test`, and the pointer and `linux-x64` tool packages; Core reads the `python` section of `.ai/commands.json` (`enabled`, `projects`, `timeoutMinutes`) on its own and adds the `Python` COVERAGE.md language (#58)
-- Python server jobs: `restore` into a per-project `.venv` (pip with `--only-binary :all:`, or `uv sync --frozen --no-build` with `uv.lock`, so no package code runs at install time and a package with no wheel fails), unpinned pytest and coverage with a note when the project does not declare them, a minimal `pyproject.toml` (or `requirements-dev.txt`) created for a test suite with no manifest, `test` (pytest with counts and failing test ids) and `lint` (flake8 and pylint as the global pre-commit hook runs them, plus pylint with super-linter's `.github/linters/.python-lint`), installing first when the manifests changed, and the shared `job_status` and `job_result` tools (#59)
-- The Node server's `test` tool accepts optional `paths` (a list of test paths, forwarded to the runner) and `coverage` (a flag to collect coverage) parameters, the shared tool schema supports string-array properties, and job results carry a note when a runner may ignore a test path filter so a filtered run is not mistaken for a full run (#56)
+- Python server (`build-python`): Native AOT tool, pyproject/requirements detection, pip/uv (#58)
+- Python server jobs: wheel-only `restore` into `.venv`, `test` (pytest), `lint`, job tools (#59)
+- Node `test` tool: optional `paths` and `coverage` parameters (#56)
 - build-node: `args` parameter for build and lint tools, and a new `typecheck` tool (#57)
 ### Fixed
-- Node server: `test` with `scope: unit` for a workspace package without its own `test:noe2e` now runs the install root's `test:noe2e` limited to the package directory and never falls back to the package's `test` script, which includes end-to-end tests; an install root's own package still falls back to `test` when it has no `test:noe2e`, and a package with no unit test script returns a clear "no unit test script" result (#55)
+- Node unit `test` in a workspace package runs the root `test:noe2e`, never e2e `test` (#55)
 
 ## [0.0.10] - 2026-11-24
 ### Changed
-- MCP tools/list now returns tools sorted by name (case-insensitive ordinal order) on both the .NET and Node servers, so clients get a stable, predictable tool list - #49
-- The .NET and Node `coverage` tools always write `COVERAGE.md` from a successful full run (`project`/`package` `all`); the opt-in report argument is removed, so there is no option to skip the report. A single-project or single-package run never writes it - #51
-- `COVERAGE.md` rows record covered and coverable line counts after the percentage (`| Project | Line Coverage | Covered | Coverable |`), with Overall the sum of the rows. A single-project (.NET) or single-package (Node) coverage run now replaces only its own row and recomputes Overall from the counts; when a row has no counts (a file written before this change) Overall is left unchanged and `job_result`'s `coverageReportNote` says why - #52
+- MCP tools/list returns tools sorted by name on the .NET and Node servers - #49
+- .NET/Node `coverage` always writes `COVERAGE.md` on a full run; report arg removed - #51
+- `COVERAGE.md` rows add covered/coverable counts; a single-project run updates its row - #52
 
 ## [0.0.9] - 2026-11-19
 ### Fixed
-- `buildcheck`, `cleanup` and `changelog_lint` find the .NET tool manifest the way `dotnet tool run` does, in the repository root and then each parent directory up to the filesystem root, instead of refusing to run when the manifest is above the repository; the refusal now names the directory searched up from (#45)
+- `buildcheck`, `cleanup`, `changelog_lint` find the tool manifest in parent directories (#45)
 ### Removed
-- The `changelog_lint` tool; lint `CHANGELOG.md` with `changelog_lint` on the changelog MCP server instead (#46)
+- The `changelog_lint` tool; use `changelog_lint` on the changelog MCP server instead (#46)
 
 ## [0.0.8] - 2026-11-17
 ### Added
-- The Node server (`credfeto-build-node`, MCP server `build-node`), a Native AOT dotnet tool: npm-only detection of the root and `src/` install roots and their workspaces, a `detect` tool, a non-recursive repository watch that never enters `node_modules`, `--self-test`, and the pointer and `linux-x64` tool packages (#39)
-- Node server jobs: `restore` (`npm ci --ignore-scripts`, the only install path), `build`, `lint` and `test` (offered only when a package has the script, `test` preferring `test:noe2e` for scope `unit`, installing first when `node_modules` is out of date, `CI=true` for every step), Vitest, Jest and `node --test` output parsers chosen by the runner inferred from each package's test script and dependencies, `add_package` and `update_package` for the root and workspace `package.json` files with validated package ids and versions, and the shared `job_status` and `job_result` tools (#41)
-- Node server `coverage` tool: runs a package's own `test:coverage` script (or the one `node.coverageScript` names, and only where the package has it), reads the Cobertura report it writes (`coverage/cobertura-coverage.xml`, or `node.coverageFile` inside the package) as one row per npm package, and with `write_report` writes the `## Node` section of `COVERAGE.md`; the shared Cobertura reader now skips a report's DOCTYPE (as Vitest writes) instead of refusing it, still never fetching or expanding it (#43)
+- Node server (`build-node`): Native AOT tool, npm-only detection, `detect`, repo watch (#39)
+- Node server jobs: `restore` (`npm ci`), `build`, `lint`, `test`, test output parsers (#41)
+- Node server `coverage` tool reads the Cobertura report and writes the Node section (#43)
 
 ## [0.0.7] - 2026-11-16
 ### Changed
-- Core is ready for a second language server: `.ai/commands.json` reads each language's section on its own, so a `node` section (`enabled`, `packages`, `testScript`, `coverageScript`, `coverageFile`, `timeoutMinutes`) or a `python` section no longer makes the .NET server ignore the whole file, and a bad section only voids that language's settings; `COVERAGE.md` sections are per language (`.NET`, `Node`), a missing one is inserted in the documented order (.NET, Node, Python, Shell), and a section is written under an exclusive lock so two servers finishing together keep both sections; the repository watcher takes a watch plan (exact file names, recursive or not, which directories), so a Node server can watch a few directories without one kernel watch per `node_modules` directory. The .NET server's tools, schemas and figures are unchanged (#37)
+- Core: per-language `.ai/commands.json` sections and `COVERAGE.md` sections (#37)
 
 ## [0.0.6] - 2026-11-16
 ### Added
-- `job_result` waits up to `wait_seconds` (0 to 600, default 240) for a running job to finish, so agents no longer poll `job_status` (#34)
+- `job_result` waits up to `wait_seconds` (0-600, default 240) for a running job (#34)
 ### Changed
-- The language-neutral MCP server infrastructure (command line and self-test, stdio host, live tool list, repository watcher, job tools, argument and schema helpers, tool errors and the command runner) moved from the .NET server into a new shared `Credfeto.Build.Server` library, and the shared test helpers into `Credfeto.Build.Testing`, ready for a second language server; the .NET server's tools, schemas, output and start-up are unchanged (#32)
-- Tool descriptions, the server instructions and the job-already-running error now say to wait with `job_result` instead of polling `job_status`, and a waiting `job_result` sends a progress notification every 15 seconds (#34)
+- Language-neutral server code moved into the shared `Credfeto.Build.Server` library (#32)
+- Docs say wait with `job_result`, not poll `job_status`; progress every 15 seconds (#34)
 
 ## [0.0.5] - 2026-11-15
 ### Added
 - `--self-test` and `--help` command-line switches for credfeto-build-dotnet
-- .NET server: a `package_versions` tool lists a NuGet package's versions on the repository's configured package sources (`dotnet package search --exact-match` from the solution directory, never `--source`), newest first, with the latest stable and prerelease version per source and overall, and whether package source mapping lets restore use each source, so agents no longer query nuget.org directly (#26)
-- The `coverage` tool gains a `write_report` argument that writes the .NET section of COVERAGE.md with the measured per-component and Overall coverage, giving the coverage ratchet a committed baseline to compare against (#12)
+- .NET `package_versions` tool lists NuGet package versions from configured sources (#26)
+- `coverage` `write_report` argument writes the .NET section of COVERAGE.md (#12)
 ### Fixed
-- A `BUILD_MCP_REPO_ROOT` or `BUILD_MCP_LOG_DIR` that is set but is not an absolute path (relative, empty or whitespace) now stops the server at startup, and fails `--self-test`, with exit code 1 and a stderr message naming the variable and the value, instead of being silently replaced by the default; the default applies only when the variable is unset. A set but blank `BUILD_MCP_BUILDTEST` now fails the `buildtest` tool, as a relative one already did, rather than falling back to `PATH` (#18)
-- The default job log folder is now per-user ($XDG_STATE_HOME/credfeto-build-mcp/logs, else ~/.local/state/credfeto-build-mcp/logs, else a credfeto-build-mcp-<uid> folder in the temp directory) and is created owner-only (0700) when BUILD_MCP_LOG_DIR is unset, so users on a shared machine no longer share job logs (#17)
-- The solution builds again: long methods in the .NET server DotnetDetector and CleanupFileSelector are split into smaller methods to satisfy the MA0051 method-length analyzer (refactor only, no behaviour change) (#17)
-- With no `BUILD_MCP_LOG_DIR` and no absolute `XDG_STATE_HOME` or `HOME`, job logs now go to a new private folder that the server creates in the temporary directory at startup, with a random name and mode 0700, instead of the predictable credfeto-build-mcp-<uid> folder there, which another user could create first or replace with a symlink. If that folder can't be created, startup fails with a message to set `BUILD_MCP_LOG_DIR` (#19)
-- With `BUILD_MCP_REPO_ROOT` unset and no `/workspace/repo` folder, the server now uses the git top-level folder of the directory it was started in, and stops at startup with a clear stderr message (exit code 1) when that is not a git checkout, instead of serving a missing folder. At startup it writes the chosen repository root and its source (the variable, the default or the git root) to stderr, never stdout (#29)
+- Non-absolute `BUILD_MCP_REPO_ROOT` or `BUILD_MCP_LOG_DIR` now fails at startup (#18)
+- Default job log folder is per-user and created owner-only (0700) (#17)
+- Split long DotnetDetector and CleanupFileSelector methods to satisfy MA0051 (#17)
+- Fallback job log folder in temp is random-named and 0700, not a predictable path (#19)
+- With no `BUILD_MCP_REPO_ROOT` or `/workspace/repo`, the git top-level folder is used (#29)
 ### Changed
 - SDK - Updated DotNet SDK to 11.0.100
 
 ## [0.0.4] - 2026-11-11
 ### Fixed
-- .NET server: `test` with scope `all` (the default) now leaves out the `*.Integration.Tests` and `*.Benchmark.Tests` namespaces with `--filter-not-namespace`, as pre-commit `buildtest` does, so benchmark failures CI never sees no longer fail the run. Integration and benchmark test projects can be run by name with scope `project` (#13)
+- .NET `test` scope `all` skips `*.Integration.Tests` and `*.Benchmark.Tests` namespaces (#13)
 ### Changed
-- .NET server: `build` and `test` use pre-commit `buildtest`'s settings from one shared list: restore first, then build with `--no-restore`, the `buildtest` `-p:` properties and `-nodeReuse:False`; `test` then runs with `--no-restore --no-build --long-running 10 --parallel-algorithm aggressive --ignore-exit-code 8`. A failed restore or build ends the job, so tests never run against stale binaries (#13)
+- .NET `build` and `test` use pre-commit `buildtest` settings; a failed build ends the job (#13)
 
 ## [0.0.3] - 2026-11-05
 ### Fixed
-- git commands (and the test helper) no longer inherit the repository-locating `GIT_*` variables git sets for hooks, so the test suite run from a worktree's pre-commit hook no longer commits into, branches or reconfigures the real repository
-- Jobs: a job's log file is now flushed and closed as soon as the job finishes (success, failure, timeout or cancellation), before `job_status` reports it finished, so a wait on the log returns straight away instead of running to its timeout
-- credfeto-build-dotnet advertises no tools in a repository without a .NET solution, and tests pin the tools/list_changed behaviour for .sln and .slnx (#3)
+- git commands no longer inherit hook `GIT_*` variables, so tests cannot touch the real repo
+- Jobs: the log file is closed as soon as the job finishes, before `job_status` reports it
+- credfeto-build-dotnet advertises no tools in a repository without a .NET solution (#3)
 ### Changed
-- All projects target net11.0; the redundant Microsoft.Extensions.DependencyInjection.Abstractions package reference is dropped (it is part of the framework)
+- All projects target net11.0; redundant DependencyInjection.Abstractions reference dropped
 - SDK - Updated DotNet SDK to 11.0.100-rc.3.26522.148
 
 ## [0.0.2] - 2026-11-03
 ### Fixed
-- .NET server: a plain `dotnet pack -c Release` now also packs the `Credfeto.Build.Dotnet.Server.linux-x64` Native AOT tool package next to the pointer package, so CI publishes both and `dotnet tool install -g Credfeto.Build.Dotnet.Server` works
+- .NET server: `dotnet pack` also packs the `linux-x64` Native AOT tool package
 
 ## [0.0.1] - 2026-11-02
 ### Added
-- .NET build, test and coverage MCP server (`credfeto-build-dotnet`), a Native AOT stdio server, and the shared core: job runner, repository detection, Cobertura parsing and `.ai/commands.json` overrides
-- .NET server: watches the repository for project and solution changes, re-detects, rebuilds the tool list and sends `notifications/tools/list_changed`; every call is checked against a fresh detection
-- .NET server: `buildcheck`, `cleanup` and `changelog_lint` tools that run the repository's own .NET tools, and a `buildtest` tool that runs the installed pre-commit `buildtest` script
-- .NET server: packed as a Native AOT dotnet global tool (`dotnet tool install -g Credfeto.Build.Dotnet.Server`, command `credfeto-build-dotnet`) with a `linux-x64` RID-specific package
+- .NET build, test and coverage MCP server (`credfeto-build-dotnet`) and the shared core
+- .NET server: re-detects on project/solution changes and sends `tools/list_changed`
+- .NET server: `buildcheck`, `cleanup`, `changelog_lint` and `buildtest` tools
+- .NET server: packed as a Native AOT dotnet global tool with a `linux-x64` package
 
 ## [0.0.0] - Project created
