@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Core.Resources;
 using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Tools;
@@ -17,9 +18,9 @@ public sealed class NodeWorkspace : INodeDetectionSource, IRepositoryChangeHandl
 {
     private readonly LanguageWorkspace<NodeDetection> _workspace;
 
-    public NodeWorkspace(NodeDetection initial, IJobRunner runner, NpmLocator npm)
+    public NodeWorkspace(NodeDetection initial, IJobRunner runner, NpmLocator npm, MachineResources resources)
     {
-        ToolContext context = new(detection: this, runner: runner, npm: npm);
+        ToolContext context = new(detection: this, runner: runner, npm: npm, resources: resources);
         this._workspace = new(
             initial: initial,
             language: new NodeWorkspaceLanguage(repositoryRoot: initial.RepositoryRoot, context: context)

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Coverage;
+using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Testing;
@@ -68,7 +69,7 @@ public sealed class TestTool : BuildTool
         : base(
             name: ToolNames.TEST,
             title: "Run npm tests",
-            description: "Starts a job that runs the test script of the package chosen in package with CI=true, installing first when node_modules is missing or older than the lock file. scope unit (the default) runs test:noe2e, as the pre-commit hook does: a workspace package without its own runs its install root's test:noe2e from the install root with the package's directory after --, and is refused with no job started when the install root's package has none either; only an install root's own package falls back to test. all prefers test; node.testScript in .ai/commands.json replaces the choice for packages that have it. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. paths limits the run to those test files and coverage passes the runner's coverage switch; when a package's runner is not known, job_result carries a note that they may have been ignored. Returns the job id at once; call job_result to wait for its outcome, with pass/fail counts and failing test names for Vitest, Jest and node --test",
+            description: "Starts a job that runs the test script of the package chosen in package with CI=true, installing first when node_modules is missing or older than the lock file. scope unit (the default) runs test:noe2e, as the pre-commit hook does: a workspace package without its own runs its install root's test:noe2e from the install root with the package's directory after --, and is refused with no job started when the install root's package has none either; only an install root's own package falls back to test. all prefers test; node.testScript in .ai/commands.json replaces the choice for packages that have it. all runs the script once at each install root whose own package has it, otherwise in each workspace package that has it. paths limits the run to those test files and coverage passes the runner's coverage switch; when a package's runner is not known, job_result carries a note that they may have been ignored. Vitest and Jest get --maxWorkers set to as many workers as the memory limit (cgroup, else MemAvailable) holds at 1024 MB each, 1536 MB with coverage, or node.memoryPerWorkerMb, never more than the processor count; Jest also gets --workerIdleMemoryLimit at that budget. Other runners get nothing. job_result reports the limit and worker count, and says when a step exiting 137 was most likely out of memory. Returns the job id at once; call job_result to wait for its outcome, with pass/fail counts and failing test names for Vitest, Jest and node --test",
             schema: [Scope, package, Paths, Coverage],
             readOnly: false
         )
@@ -99,10 +100,14 @@ public sealed class TestTool : BuildTool
             repository: repository,
             script: package => AnyTestScript(repository: repository, package: package)
         );
+        ResourceNote resources = this._context.Resources.Plan(
+            WorkerLimits.MemoryPerWorkerMb(repository: repository, coverage: coverage)
+        );
         IReadOnlyList<ScriptRun> runs =
         [
             .. Runs(repository: repository, choice: choice, scope: scope)
-                .Select(run => TestFilter.Apply(run: run, paths: paths, coverage: coverage)),
+                .Select(run => TestFilter.Apply(run: run, paths: paths, coverage: coverage))
+                .Select(run => WorkerLimits.Apply(run: run, resources: resources)),
         ];
 
         return await JobStarter.StartAsync(
@@ -115,6 +120,7 @@ public sealed class TestTool : BuildTool
             coverage: new(Files: [], ReportPath: null, Language: CoverageLanguage.Node, Components: null),
             changedFiles: null,
             note: TestFilter.Note(runs: runs, paths: paths, coverage: coverage),
+            resources: resources,
             cancellationToken: cancellationToken
         );
     }

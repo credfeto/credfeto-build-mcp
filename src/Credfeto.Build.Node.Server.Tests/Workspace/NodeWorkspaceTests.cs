@@ -91,7 +91,8 @@ public sealed class NodeWorkspaceTests : TestBase, IDisposable
         using NodeWorkspace workspace = new(
             initial: detection,
             runner: new RecordingJobRunner(),
-            npm: TestTools.FakeNpm
+            npm: TestTools.FakeNpm,
+            resources: TestTools.FourGigabyteHost
         );
         await using RepositoryWatcher watcher = new(
             repositoryRoot: this._repository.Path,
@@ -139,7 +140,8 @@ public sealed class NodeWorkspaceTests : TestBase, IDisposable
         using NodeWorkspace workspace = new(
             initial: detection,
             runner: new RecordingJobRunner(),
-            npm: TestTools.FakeNpm
+            npm: TestTools.FakeNpm,
+            resources: TestTools.FourGigabyteHost
         );
 
         string[] names = [.. workspace.Tools.Select(static tool => tool.ProtocolTool.Name)];

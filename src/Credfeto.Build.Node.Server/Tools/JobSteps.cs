@@ -10,19 +10,6 @@ namespace Credfeto.Build.Node.Server.Tools;
 // The steps of a script job: an install for each install root that needs one, then each package's script
 internal static class JobSteps
 {
-    public static IReadOnlyList<ProcessStep> ForScripts(
-        NodeRepository repository,
-        IReadOnlyList<(NodePackage Package, string Script)> targets,
-        string npm
-    )
-    {
-        return ForRuns(
-            repository: repository,
-            runs: [.. targets.Select(static target => new ScriptRun(Package: target.Package, Script: target.Script))],
-            npm: npm
-        );
-    }
-
     public static IReadOnlyList<ProcessStep> ForRuns(
         NodeRepository repository,
         IReadOnlyList<ScriptRun> runs,

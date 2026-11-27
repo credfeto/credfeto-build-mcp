@@ -1,5 +1,7 @@
+using System;
 using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Core.Resources;
 using FunFair.Test.Common;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -21,6 +23,19 @@ public sealed class DependencyInjectionTests : DependencyInjectionTestsBase
             expected: "/work/repo",
             actual: this.ServiceProvider.GetRequiredService<BuildServerEnvironment>().RepositoryRoot
         );
+    }
+
+    [Fact]
+    public void TheMachinesResourcesAreRegistered()
+    {
+        Assert.IsType<SystemMemorySource>(this.ServiceProvider.GetRequiredService<IMemorySource>());
+
+        // The host's own memory limit decides the count, so only its bounds are certain
+        ResourceNote plan = this
+            .ServiceProvider.GetRequiredService<MachineResources>()
+            .Plan(WorkerBudget.TEST_MEMORY_PER_WORKER_MB);
+
+        Assert.InRange(actual: plan.Workers, low: 1, high: Environment.ProcessorCount);
     }
 
     private static IServiceCollection Configure(IServiceCollection services)

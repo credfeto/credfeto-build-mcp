@@ -21,4 +21,8 @@ public sealed record NodeRepository(
     // node.coverageFile: where a package's Cobertura report is written, relative to the package's directory;
     // null for the Vitest default
     public string? CoverageFile { get; init; }
+
+    // node.memoryPerWorkerMb: the memory each test worker is budgeted, in place of the automatic budget; null when
+    // unset or not a positive number
+    public int? MemoryPerWorkerMb { get; init; }
 }

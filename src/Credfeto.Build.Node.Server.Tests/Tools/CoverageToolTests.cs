@@ -189,6 +189,32 @@ public sealed class CoverageToolTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task CoverageInAFourGigabyteContainerRunsTwoWorkersAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            repository: this.Workspace(coverageScript: null, coverageFile: null, rootScripts: []),
+            arguments: Arguments(("package", WEB))
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(
+            expected: ["run", "test:coverage", "--workspace=packages/web", "--", "--maxWorkers=2"],
+            actual: definition.Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: new ResourceNote(
+                Workers: 2,
+                MemoryPerWorkerMb: 1536,
+                MemoryLimitMb: 4096,
+                MemoryLimitSource: "cgroup v2"
+            ),
+            actual: definition.Resources
+        );
+    }
+
+    [Fact]
     public async Task AStaleReportIsDeletedBeforeTheRunAsync()
     {
         string stale = this.InRepository("packages/web/coverage/cobertura-coverage.xml");

@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Core.Resources;
 using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Server.Tools.Exceptions;
@@ -9,11 +10,12 @@ namespace Credfeto.Build.Node.Server.Tools;
 
 public sealed class ToolContext
 {
-    public ToolContext(INodeDetectionSource detection, IJobRunner runner, NpmLocator npm)
+    public ToolContext(INodeDetectionSource detection, IJobRunner runner, NpmLocator npm, MachineResources resources)
     {
         this.Detection = detection;
         this.Runner = runner;
         this.Npm = npm;
+        this.Resources = resources;
     }
 
     public INodeDetectionSource Detection { get; }
@@ -21,6 +23,8 @@ public sealed class ToolContext
     public IJobRunner Runner { get; }
 
     public NpmLocator Npm { get; }
+
+    public MachineResources Resources { get; }
 
     public static NodeRepository RepositoryOf(NodeDetection detection)
     {
