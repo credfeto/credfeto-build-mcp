@@ -51,6 +51,33 @@ public sealed class NodeWorkspaceTests : TestBase, IDisposable
         Assert.Contains(expected: "package.json", collection: filter.FileNames, comparer: StringComparer.Ordinal);
         Assert.Contains(expected: "package-lock.json", collection: filter.FileNames, comparer: StringComparer.Ordinal);
         Assert.Contains(expected: "yarn.lock", collection: filter.FileNames, comparer: StringComparer.Ordinal);
+        Assert.Contains(expected: "tsconfig.json", collection: filter.FileNames, comparer: StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheSignatureChangesWhenATsConfigIsAddedAsync()
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        string before = NodeWorkspace.Signature(
+            await NodeDetector.DetectAsync(
+                repositoryRoot: this._repository.Path,
+                cancellationToken: this.CancellationToken()
+            )
+        );
+
+        _ = await this._repository.WriteAsync(
+            relative: "tsconfig.json",
+            content: "{}",
+            cancellationToken: this.CancellationToken()
+        );
+        string after = NodeWorkspace.Signature(
+            await NodeDetector.DetectAsync(
+                repositoryRoot: this._repository.Path,
+                cancellationToken: this.CancellationToken()
+            )
+        );
+
+        Assert.NotEqual(expected: before, actual: after, comparer: StringComparer.Ordinal);
     }
 
     [Fact]

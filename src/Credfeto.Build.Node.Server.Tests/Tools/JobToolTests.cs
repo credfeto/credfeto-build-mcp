@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -70,6 +71,11 @@ public sealed class JobToolTests : TestBase, IDisposable
         );
         Assert.DoesNotContain(
             expected: ToolNames.TEST,
+            collection: tools.Select(static tool => tool.ProtocolTool.Name),
+            comparer: StringComparer.Ordinal
+        );
+        Assert.DoesNotContain(
+            expected: ToolNames.TYPECHECK,
             collection: tools.Select(static tool => tool.ProtocolTool.Name),
             comparer: StringComparer.Ordinal
         );
@@ -332,6 +338,200 @@ public sealed class JobToolTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task BuildWithoutArgsPassesNothingAfterTheScriptAsync()
+    {
+        CallToolResult result = await this.CallAsync(name: ToolNames.BUILD, arguments: Arguments());
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Equal(
+            expected: ["run", "build", "--workspace=packages/web"],
+            actual: Assert.Single(this._runner.Started).Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task BuildArgsAreHandedToTheScriptAfterDashDashAsync()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(("package", SampleWorkspace.WEB));
+        arguments[ScriptArguments.NAME] = Paths("handler", "--mode=production", "src/entry.ts");
+
+        CallToolResult result = await this.CallAsync(name: ToolNames.BUILD, arguments: arguments);
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Equal(
+            expected:
+            [
+                "run",
+                "build",
+                "--workspace=packages/web",
+                "--",
+                "handler",
+                "--mode=production",
+                "src/entry.ts",
+            ],
+            actual: Assert.Single(this._runner.Started).Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task LintArgsAreHandedToTheScriptAfterDashDashAsync()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments();
+        arguments[ScriptArguments.NAME] = Paths("--fix");
+
+        CallToolResult result = await this.CallAsync(name: ToolNames.LINT, arguments: arguments);
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Equal(
+            expected: ["run", "lint", "--", "--fix"],
+            actual: Assert.Single(this._runner.Started).Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Theory]
+    [InlineData("handler; rm -rf /")]
+    [InlineData("$(whoami)")]
+    [InlineData("a b")]
+    [InlineData("")]
+    public async Task BuildRefusesAnUnsafeArgumentWithoutAJobAsync(string value)
+    {
+        Dictionary<string, JsonElement> arguments = Arguments();
+        arguments[ScriptArguments.NAME] = Paths("handler", value);
+
+        CallToolResult result = await this.CallAsync(name: ToolNames.BUILD, arguments: arguments);
+
+        Assert.True(condition: result.IsError, userMessage: "the argument is refused");
+        Assert.Contains(
+            expectedSubstring: "Invalid value for args",
+            actualString: Text(result),
+            comparisonType: StringComparison.Ordinal
+        );
+        Assert.Empty(this._runner.Started);
+    }
+
+    [Fact]
+    public async Task BuildRefusesArgsThatAreNotAListOfStringsAsync()
+    {
+        Dictionary<string, JsonElement> arguments = Arguments(("args", "handler"));
+
+        CallToolResult result = await this.CallAsync(name: ToolNames.BUILD, arguments: arguments);
+
+        Assert.True(condition: result.IsError, userMessage: "args must be a list");
+        Assert.Empty(this._runner.Started);
+    }
+
+    [Theory]
+    [InlineData(ToolNames.BUILD)]
+    [InlineData(ToolNames.LINT)]
+    public void ScriptToolsOfferArgsAsAListOfStrings(string name)
+    {
+        JsonElement args = TestTools
+            .Find(tools: this.Tools(SampleWorkspace.Create(this._repository.Path)), name: name)
+            .ProtocolTool.InputSchema.GetProperty("properties")
+            .GetProperty(ScriptArguments.NAME);
+
+        Assert.Equal(expected: "array", actual: args.GetProperty("type").GetString());
+        Assert.Equal(
+            expected: ScriptArguments.PATTERN,
+            actual: args.GetProperty("items").GetProperty("pattern").GetString()
+        );
+    }
+
+    [Fact]
+    public void TypeCheckIsOfferedForATsConfigAlone()
+    {
+        IReadOnlyList<McpServerTool> tools = this.Tools(this.TypeCheckRepository());
+
+        Assert.Contains(
+            expected: ToolNames.TYPECHECK,
+            collection: tools.Select(static tool => tool.ProtocolTool.Name),
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task TypeCheckPrefersThePackagesTypecheckScriptAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            repository: this.TypeCheckRepository(),
+            name: ToolNames.TYPECHECK,
+            arguments: Arguments(("package", "scripted"))
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        ProcessStep step = Assert.Single(this._runner.Started).Steps[^1];
+        Assert.Equal(expected: TestTools.NPM, actual: step.FileName);
+        Assert.Equal(
+            expected: ["run", "typecheck", "--workspace=packages/scripted"],
+            actual: step.Arguments,
+            comparer: StringComparer.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task TypeCheckFallsBackToTheLocalTscAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            repository: this.TypeCheckRepository(),
+            name: ToolNames.TYPECHECK,
+            arguments: Arguments(("package", "configured"))
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        ProcessStep step = Assert.Single(this._runner.Started).Steps[^1];
+        Assert.Equal(
+            expected: Path.Combine(
+                path1: this._repository.Path,
+                path2: NpmCommands.NODE_MODULES,
+                path3: ".bin",
+                path4: NpmCommands.TSC
+            ),
+            actual: step.FileName
+        );
+        Assert.Equal(
+            expected: ["--noEmit", "-p", "tsconfig.json"],
+            actual: step.Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(expected: this._repository.Combine("packages/configured"), actual: step.WorkingDirectory);
+    }
+
+    [Fact]
+    public async Task TypeCheckOfAllChecksEveryQualifyingPackageAfterOneInstallAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            repository: this.TypeCheckRepository(),
+            name: ToolNames.TYPECHECK,
+            arguments: Arguments()
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(
+            expected: ["restore .", "typecheck scripted", "tsc configured"],
+            actual: definition.Steps.Select(static step => step.Name),
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Null(definition.TestParser);
+    }
+
+    [Fact]
+    public async Task TypeCheckRejectsAPackageWithNeitherAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            repository: this.TypeCheckRepository(),
+            name: ToolNames.TYPECHECK,
+            arguments: Arguments(("package", "plain"))
+        );
+
+        Assert.True(condition: result.IsError, userMessage: "plain has nothing to check with");
+        Assert.Empty(this._runner.Started);
+    }
+
+    [Fact]
     public async Task AJobNeedsNpmOnThePathAsync()
     {
         CallToolResult result = await this.CallAsync(
@@ -479,6 +679,33 @@ public sealed class JobToolTests : TestBase, IDisposable
             comparisonType: StringComparison.Ordinal
         );
         Assert.Empty(this._runner.Started);
+    }
+
+    // A workspace whose root has neither a typecheck script nor a tsconfig.json, so all reaches every workspace package
+    private NodeRepository TypeCheckRepository()
+    {
+        return new(
+            RepositoryRoot: this._repository.Path,
+            InstallRoots: [new NodeInstallRoot(RelativeDirectory: ".", LockFile: "package-lock.json")],
+            Packages:
+            [
+                new NodePackage(Name: "root", RelativeDirectory: ".", Scripts: []),
+                new NodePackage(
+                    Name: "scripted",
+                    RelativeDirectory: "packages/scripted",
+                    Scripts: [NodeScripts.TYPECHECK]
+                )
+                {
+                    HasTsConfig = true,
+                },
+                new NodePackage(Name: "configured", RelativeDirectory: "packages/configured", Scripts: [])
+                {
+                    HasTsConfig = true,
+                },
+                new NodePackage(Name: "plain", RelativeDirectory: "packages/plain", Scripts: []),
+            ],
+            Timeout: TimeSpan.FromMinutes(5)
+        );
     }
 
     private IReadOnlyList<McpServerTool> Tools(NodeRepository repository)

@@ -325,8 +325,9 @@ restores, builds, lints, tests and measures coverage for them, and adds or updat
     another manager, is reported as unsupported.
   - A root with no lock file is reported as such, because `npm ci` needs one.
 - **Packages:** each package's name (its directory when `package.json` has none), its install root, which of the
-  `build`, `lint`, `test`, `test:noe2e` and `test:coverage` scripts it has, and the dependencies it declares in
-  `dependencies`, `devDependencies` and `optionalDependencies` are recorded.
+  `build`, `lint`, `test`, `test:noe2e`, `test:coverage` and `typecheck` scripts it has, whether its directory holds a
+  `tsconfig.json`, and the dependencies it declares in `dependencies`, `devDependencies` and `optionalDependencies`
+  are recorded.
 - **Test runner:** Vitest, Jest or `node --test`, from the first word of the package's test script (after any
   `VAR=value` assignments), otherwise from a `vitest` or `jest` dependency. It is used to read the test output and to
   pick the `test` tool's coverage switch; an unknown runner reports exit codes alone and gets no coverage switch.
@@ -343,8 +344,8 @@ When nothing supported is found, the server **registers no tools**, and its inst
 
 Each listed directory is watched **without recursion**: the repository root, `src/`, `.ai/`, and the workspace
 directories and glob parents found at start-up. A recursive watch on Linux adds one kernel watch per directory, so a
-repository with `node_modules` would run out of watches. Changes to `package.json`, the lock files or
-`.ai/commands.json`, and directories coming and going, are debounced and detected again. When the tools change, the
+repository with `node_modules` would run out of watches. Changes to `package.json`, `tsconfig.json`, the lock files
+or `.ai/commands.json`, and directories coming and going, are debounced and detected again. When the tools change, the
 server sends `notifications/tools/list_changed`.
 
 Only workspace directories that existed at start-up are watched. One added later is picked up by the next change in a
@@ -355,13 +356,14 @@ watched directory, or by the next `detect` call, which always detects afresh.
 | Tool | Parameters | What it does |
 | --- | --- | --- |
 | `add_package` | `package_id`, `version` (optional), `dev`, `package` | `npm install <id>@<version>` into one package's `package.json` (`--save-dev` with `dev`), then lists the version installed. |
-| `build` | `package` | `npm run build`; offered only when some package has a `build` script. |
+| `build` | `package`, `args` (optional list) | `npm run build`, with `args` after `--`; offered only when some package has a `build` script. See Script arguments below. |
 | `coverage` | `package` | Runs the package's own coverage script and reads the Cobertura report it writes; offered only when some package has a `test:coverage` script, or the script `node.coverageScript` names. With `package` `all`, a successful run always writes the `## Node` section of `COVERAGE.md`; a single-package run replaces only its own row. See Node coverage below. |
 | `detect` | none | Lists the install roots and their lock files, the packages with their directories, install roots, scripts and test runners, the timeout and any overrides error, as they are now. |
 | `job_result`, `job_status` | `id`; `wait_seconds` on `job_result` | As for the .NET server: `job_result` waits for the job to finish. |
-| `lint` | `package` | `npm run lint`; offered only when some package has a `lint` script. |
+| `lint` | `package`, `args` (optional list) | `npm run lint`, with `args` after `--`; offered only when some package has a `lint` script. See Script arguments below. |
 | `restore` | none | `npm ci --ignore-scripts --no-audit --no-fund` in every install root. The only install path. |
 | `test` | `scope` (`unit` default, `all`), `package`, `paths` (optional list), `coverage` (`false` default) | `unit` runs `test:noe2e` (as the pre-commit hook does): the package's own, otherwise its install root's `test:noe2e`, run from the install root with the package's directory after `--` as the runner's path filter. A workspace package with neither is refused with no job started; only an install root's own package without `test:noe2e` falls back to `test`. `all` runs `test`. `node.testScript` replaces the choice. `paths` and `coverage` narrow and measure a run; see Test paths and coverage below. Returns pass, fail and skip counts and failing test names for Vitest, Jest and `node --test`. |
+| `typecheck` | `package` | `npm run typecheck` for a package with a `typecheck` script; otherwise, for a package with a `tsconfig.json`, the locally installed `tsc --noEmit -p tsconfig.json` from the package's directory. Offered only when some package has either. See Type checking below. |
 | `update_package` | `package_id`, `version` (optional, `latest` when left out), `package` (`all` default) | `npm install <id>@<version>` in each chosen package whose `package.json` declares it, keeping its section, then lists the version installed. |
 
 Every tool except `detect`, `job_status` and `job_result` starts a job and returns its id at once.
@@ -369,7 +371,7 @@ Every tool except `detect`, `job_status` and `job_result` starts a job and retur
 - **`package`:** `all`, or one of the packages that has the script. A workspace package runs from its install root
   with `--workspace=<directory>`. For `all`, an install root whose own package has the script runs it once at the
   root, as the pre-commit hook does, otherwise each workspace package with the script runs.
-- **Installing first:** `build`, `lint` and `test` run `npm ci --ignore-scripts` first when
+- **Installing first:** `build`, `lint`, `test` and `typecheck` run `npm ci --ignore-scripts` first when
   `node_modules/.package-lock.json` is missing or older than the lock file, so a test run does not reinstall every
   time. A failed install stops the job.
 - **Environment:** every step gets `CI=true` (so a bare `vitest` does not go into watch mode), `NO_COLOR=1`,
@@ -379,6 +381,23 @@ Every tool except `detect`, `job_status` and `job_result` starts a job and retur
 - **Package tools:** `package_id` must be an npm registry name and `version` a version, range or dist-tag, both
   matched against fixed patterns, so no URL, path, git or alias specification reaches npm. Every install passes
   `--ignore-scripts`.
+
+### Script arguments
+
+The `build` and `lint` tools' `args` are handed to every script run after `--`, each as its own argument, as
+`npm run <script> [--workspace=<directory>] -- [<args>...]`. With no `args`, the run is unchanged. npm runs a script
+through a shell, so each argument may hold only letters, digits and `_ . @ + = : , / -`, and be 1 to 256 characters
+long; any other argument, or `args` that is not a list of strings, refuses the call with no job started.
+
+### Type checking
+
+- **Script first:** a package's own `typecheck` script runs as `npm run typecheck`, like `build` and `lint`.
+- **tsc fallback:** a package with no `typecheck` script but a `tsconfig.json` in its directory runs
+  `tsc --noEmit -p tsconfig.json` from that directory. `tsc` is the package's own `node_modules/.bin/tsc` when it has
+  one, otherwise its install root's, and is started directly, never through a shell or `npx`, so it is never
+  downloaded. When neither is installed, the step fails to start.
+- **`package`:** `all` chooses as for the other script tools: an install root whose own package qualifies runs once at
+  the root, otherwise each qualifying workspace package runs. A single package with neither is refused.
 
 ### Test paths and coverage
 

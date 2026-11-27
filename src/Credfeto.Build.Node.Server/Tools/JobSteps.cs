@@ -29,7 +29,44 @@ internal static class JobSteps
         string npm
     )
     {
-        IEnumerable<ProcessStep> installs = runs.Select(static run => run.Package.InstallRoot)
+        return
+        [
+            .. Installs(repository: repository, packages: runs.Select(static run => run.Package), npm: npm),
+            .. runs.Select(run => NpmCommands.RunScript(repository: repository, run: run, npm: npm)),
+        ];
+    }
+
+    // A target whose script is tsc has no typecheck script of its own, so the local tsc checks its tsconfig.json
+    public static IReadOnlyList<ProcessStep> ForTypeChecks(
+        NodeRepository repository,
+        IReadOnlyList<(NodePackage Package, string Script)> targets,
+        string npm
+    )
+    {
+        return
+        [
+            .. Installs(repository: repository, packages: targets.Select(static target => target.Package), npm: npm),
+            .. targets.Select(target =>
+                StringComparer.Ordinal.Equals(x: target.Script, y: NpmCommands.TSC)
+                    ? NpmCommands.TypeCheck(repository: repository, package: target.Package)
+                    : NpmCommands.RunScript(
+                        repository: repository,
+                        package: target.Package,
+                        script: target.Script,
+                        npm: npm
+                    )
+            ),
+        ];
+    }
+
+    private static IEnumerable<ProcessStep> Installs(
+        NodeRepository repository,
+        IEnumerable<NodePackage> packages,
+        string npm
+    )
+    {
+        return packages
+            .Select(static package => package.InstallRoot)
             .Distinct(StringComparer.Ordinal)
             .SelectMany(installRoot =>
                 NpmCommands.InstallIfNeeded(
@@ -38,7 +75,5 @@ internal static class JobSteps
                     npm: npm
                 )
             );
-
-        return [.. installs, .. runs.Select(run => NpmCommands.RunScript(repository: repository, run: run, npm: npm))];
     }
 }
