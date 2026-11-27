@@ -18,6 +18,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Fixed
 - Node server: `test` with `scope: unit` for a workspace package without its own `test:noe2e` now runs the install root's `test:noe2e` limited to the package directory and never falls back to the package's `test` script, which includes end-to-end tests; an install root's own package still falls back to `test` when it has no `test:noe2e`, and a package with no unit test script returns a clear "no unit test script" result (#55)
 ### Changed
+- Node test and coverage jobs size Jest/Vitest workers from the container memory limit as well as CPU count (#69)
 ### Deprecated
 ### Removed
 ### Deployment Changes
