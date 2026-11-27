@@ -13,6 +13,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Added
 ### Fixed
 ### Changed
+- Node test and coverage jobs size Jest/Vitest workers from the container memory limit as well as CPU count (#69)
 ### Deprecated
 ### Removed
 ### Deployment Changes
