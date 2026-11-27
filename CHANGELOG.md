@@ -11,12 +11,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
-- The Python server (`credfeto-build-python`, MCP server `build-python`), a Native AOT dotnet tool: strict detection of `pyproject.toml` (`[project]` table) and `requirements*.txt` projects at the root, in `src/` and in `python.projects` directories, pip or uv (with `uv.lock`) with poetry, pipenv and pdm reported as unsupported, a `detect` tool (also offered when a repository has Python test files but no manifest), a non-recursive repository watch, `--self-test`, and the pointer and `linux-x64` tool packages; Core reads the `python` section of `.ai/commands.json` (`enabled`, `projects`, `timeoutMinutes`) on its own and adds the `Python` COVERAGE.md language (#58)
-- Python server jobs: `restore` into a per-project `.venv` (pip with `--only-binary :all:`, or `uv sync --frozen --no-build` with `uv.lock`, so no package code runs at install time and a package with no wheel fails), unpinned pytest and coverage with a note when the project does not declare them, a minimal `pyproject.toml` (or `requirements-dev.txt`) created for a test suite with no manifest, `test` (pytest with counts and failing test ids) and `lint` (flake8 and pylint as the global pre-commit hook runs them, plus pylint with super-linter's `.github/linters/.python-lint`), installing first when the manifests changed, and the shared `job_status` and `job_result` tools (#59)
-- The Node server's `test` tool accepts optional `paths` (a list of test paths, forwarded to the runner) and `coverage` (a flag to collect coverage) parameters, the shared tool schema supports string-array properties, and job results carry a note when a runner may ignore a test path filter so a filtered run is not mistaken for a full run (#56)
-- build-node: `args` parameter for build and lint tools, and a new `typecheck` tool (#57)
 ### Fixed
-- Node server: `test` with `scope: unit` for a workspace package without its own `test:noe2e` now runs the install root's `test:noe2e` limited to the package directory and never falls back to the package's `test` script, which includes end-to-end tests; an install root's own package still falls back to `test` when it has no `test:noe2e`, and a package with no unit test script returns a clear "no unit test script" result (#55)
 ### Changed
 ### Deprecated
 ### Removed
@@ -25,6 +20,15 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
+## [0.0.11] - 2026-11-27
+### Added
+- The Python server (`credfeto-build-python`, MCP server `build-python`), a Native AOT dotnet tool: strict detection of `pyproject.toml` (`[project]` table) and `requirements*.txt` projects at the root, in `src/` and in `python.projects` directories, pip or uv (with `uv.lock`) with poetry, pipenv and pdm reported as unsupported, a `detect` tool (also offered when a repository has Python test files but no manifest), a non-recursive repository watch, `--self-test`, and the pointer and `linux-x64` tool packages; Core reads the `python` section of `.ai/commands.json` (`enabled`, `projects`, `timeoutMinutes`) on its own and adds the `Python` COVERAGE.md language (#58)
+- Python server jobs: `restore` into a per-project `.venv` (pip with `--only-binary :all:`, or `uv sync --frozen --no-build` with `uv.lock`, so no package code runs at install time and a package with no wheel fails), unpinned pytest and coverage with a note when the project does not declare them, a minimal `pyproject.toml` (or `requirements-dev.txt`) created for a test suite with no manifest, `test` (pytest with counts and failing test ids) and `lint` (flake8 and pylint as the global pre-commit hook runs them, plus pylint with super-linter's `.github/linters/.python-lint`), installing first when the manifests changed, and the shared `job_status` and `job_result` tools (#59)
+- The Node server's `test` tool accepts optional `paths` (a list of test paths, forwarded to the runner) and `coverage` (a flag to collect coverage) parameters, the shared tool schema supports string-array properties, and job results carry a note when a runner may ignore a test path filter so a filtered run is not mistaken for a full run (#56)
+- build-node: `args` parameter for build and lint tools, and a new `typecheck` tool (#57)
+### Fixed
+- Node server: `test` with `scope: unit` for a workspace package without its own `test:noe2e` now runs the install root's `test:noe2e` limited to the package directory and never falls back to the package's `test` script, which includes end-to-end tests; an install root's own package still falls back to `test` when it has no `test:noe2e`, and a package with no unit test script returns a clear "no unit test script" result (#55)
 
 ## [0.0.10] - 2026-11-24
 ### Changed
