@@ -213,7 +213,8 @@ executable. `enabled: false` turns the server off for the repository. `solution`
 the repository. `timeoutMinutes` is clamped to 1-240.
 
 Each language's section is read on its own, so the file can also carry a `node` section (`enabled`, `packages`,
-`testScript`, `coverageScript`, `coverageFile`, `timeoutMinutes`) for the Node server, and a `python` section, without
+`testScript`, `coverageScript`, `coverageFile`, `memoryPerWorkerMb`, `timeoutMinutes`) for the Node server, and a
+`python` section, without
 the .NET server rejecting it. An unknown property inside the `dotnet` section, or a `dotnet` value of the wrong type,
 makes the server ignore only that section. An unknown top-level setting is reported but leaves the known sections in
 force. Invalid JSON or a file over 64 KiB make the server ignore the whole file. `detect` reports why in every case,
@@ -335,8 +336,9 @@ restores, builds, lints, tests and measures coverage for them, and adds or updat
   reported.
 - **Overrides:** the `node` section of `.ai/commands.json` applies `enabled`, `packages` (narrows the detected
   packages by name, and reports any name that matches nothing), `testScript` (the script `test` runs instead of its
-  own choice, for the packages that already have it; an override selects, it never adds) and `timeoutMinutes`
-  (default 30, at most 240).
+  own choice, for the packages that already have it; an override selects, it never adds), `memoryPerWorkerMb` (the
+  memory budget of one test worker; see Test workers and memory below; a value that is not positive is reported and
+  the automatic budget used) and `timeoutMinutes` (default 30, at most 240).
 
 When nothing supported is found, the server **registers no tools**, and its instructions give the reason.
 
@@ -415,6 +417,27 @@ The `test` tool's `paths` and `coverage` are handed to the test runner after `--
 - **Unknown runner:** a package whose runner is not known gets the paths but no coverage switch, and the job's
   `job_result` carries a `note` saying so, since its script may ignore what it is given. A `bun test` script with no
   `vitest` or `jest` dependency counts as unknown.
+
+### Test workers and memory
+
+Jest and Vitest start one worker per processor by default, which in a small container can use more memory than the
+container has, so the kernel kills the run. The `test` and `coverage` tools cap the worker count to what the memory
+holds instead:
+
+- **Limit:** the cgroup v2 `memory.max`, otherwise the cgroup v1 `memory.limit_in_bytes`, otherwise `MemAvailable`
+  from `/proc/meminfo`. An unset cgroup limit (`max`, or v1's very large value) falls through to the next. When none
+  can be read, the worker count is the processor count, as the runners would choose themselves.
+- **Budget:** 1024 MB per worker for a test run, 1536 MB with `coverage` and for the `coverage` tool, or
+  `node.memoryPerWorkerMb` when the repository sets it; an explicit setting always wins.
+- **Workers:** the limit divided by the budget, never fewer than 1 and never more than the processor count. A 4 GB
+  container runs 2 coverage workers.
+- **Arguments:** Vitest gets `--maxWorkers=<n>`; Jest gets `--maxWorkers=<n>` and
+  `--workerIdleMemoryLimit=<budget>MiB`, so a worker whose heap has grown past its budget is restarted. They come
+  first after `--`, ahead of any coverage switch, paths or directory filter. `node --test` and unknown runners get
+  nothing. `--workerIdleMemoryLimit` needs Jest 29 or later, and `--maxWorkers` Vitest 1 or later.
+- **Result:** `job_result` carries `resources` (the worker count, the budget, and the limit and where it came from),
+  and when a step exits with code 137 its `message` says it was most likely killed for running out of memory, with
+  the limit and worker count, and that a larger `memoryPerWorkerMb` runs fewer workers.
 
 ### Node coverage
 

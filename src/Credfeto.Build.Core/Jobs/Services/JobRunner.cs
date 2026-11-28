@@ -9,11 +9,14 @@ using System.Threading.Tasks;
 using Credfeto.Build.Core.Coverage;
 using Credfeto.Build.Core.Coverage.Exceptions;
 using Credfeto.Build.Core.Jobs.Exceptions;
+using Credfeto.Build.Core.Overrides;
 
 namespace Credfeto.Build.Core.Jobs.Services;
 
 public sealed class JobRunner : IJobRunner, IAsyncDisposable
 {
+    private const int KILLED_EXIT_CODE = 137;
+
     private static readonly TimeSpan ShutdownWait = TimeSpan.FromSeconds(30);
 
     private readonly Dictionary<string, RunningJob> _jobs = [with(StringComparer.Ordinal)];
@@ -216,7 +219,10 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
                 cancellationToken: job.Cancellation.Token
             );
             await CollectChangedFilesAsync(job: job, cancellationToken: job.Cancellation.Token);
-            await job.FinishAsync(state: failed ? JobState.Failed : JobState.Succeeded, message: null);
+            await job.FinishAsync(
+                state: failed ? JobState.Failed : JobState.Succeeded,
+                message: failed ? FailureMessage(job) : null
+            );
         }
         catch (OperationCanceledException) when (job.Cancellation.IsCancellationRequested)
         {
@@ -235,6 +241,43 @@ public sealed class JobRunner : IJobRunner, IAsyncDisposable
             // Anything unexpected still ends the job, so it can never block the next one
             await job.FinishAsync(state: JobState.Failed, message: "The job ended unexpectedly");
         }
+    }
+
+    // 137 is 128 + SIGKILL, which is what the kernel's out-of-memory killer sends; nothing else in a test run sends it
+    private static string? FailureMessage(RunningJob job)
+    {
+        if (!job.AnyStepExitedWith(KILLED_EXIT_CODE))
+        {
+            return null;
+        }
+
+        const string killed = "A step exited with code 137, so it was most likely killed for running out of memory";
+
+        if (job.Definition.Resources is not { } resources)
+        {
+            return killed;
+        }
+
+        string limit = resources.MemoryLimitMb is { } megabytes
+            ? "the memory limit was "
+                + megabytes.ToString(CultureInfo.InvariantCulture)
+                + " MB (from "
+                + resources.MemoryLimitSource
+                + ")"
+            : "no memory limit could be read";
+        string workers = resources.Workers.ToString(CultureInfo.InvariantCulture);
+        string budget = resources.MemoryPerWorkerMb.ToString(CultureInfo.InvariantCulture);
+
+        return killed
+            + ": "
+            + limit
+            + " and it ran "
+            + workers
+            + " worker(s) at "
+            + budget
+            + " MB each; a larger memoryPerWorkerMb in "
+            + OverridesLoader.RELATIVE_PATH
+            + " runs fewer workers";
     }
 
     private static async ValueTask EndCancelledAsync(RunningJob job)

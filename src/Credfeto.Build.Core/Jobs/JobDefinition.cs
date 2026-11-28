@@ -33,4 +33,7 @@ public sealed record JobDefinition(
     // When set, the component a coverage file's figures are reported as, keyed by the file's path; a file it does
     // not name keeps its own Cobertura package names
     public IReadOnlyDictionary<string, string>? CoverageComponents { get; init; }
+
+    // The memory limit and worker count the tool chose the job's arguments by, reported with its result
+    public ResourceNote? Resources { get; init; }
 }

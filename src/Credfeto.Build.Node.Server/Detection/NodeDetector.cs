@@ -82,7 +82,11 @@ public static class NodeDetector
             overrides: overrides
         );
         (string? coverageFile, string? coverageFileError) = ValidCoverageFile(overrides);
-        string? error = Combine(first: Combine(first: loadErrors, second: packagesError), second: coverageFileError);
+        (int? memoryPerWorkerMb, string? memoryError) = ValidMemoryPerWorker(overrides);
+        string? error = Combine(
+            first: Combine(first: Combine(first: loadErrors, second: packagesError), second: coverageFileError),
+            second: memoryError
+        );
 
         if (packages.Count == 0)
         {
@@ -94,7 +98,30 @@ public static class NodeDetector
             );
         }
 
-        NodeRepository repository = new(
+        return new(
+            RepositoryRoot: scan.RepositoryRoot,
+            Repository: Repository(
+                scan: scan,
+                packages: packages,
+                overrides: overrides,
+                coverageFile: coverageFile,
+                memoryPerWorkerMb: memoryPerWorkerMb
+            ),
+            Reason: "npm packages found",
+            OverridesError: error,
+            WatchedDirectories: watched
+        );
+    }
+
+    private static NodeRepository Repository(
+        PackageScan scan,
+        IReadOnlyList<NodePackage> packages,
+        NodeOverrides? overrides,
+        string? coverageFile,
+        int? memoryPerWorkerMb
+    )
+    {
+        return new(
             RepositoryRoot: scan.RepositoryRoot,
             InstallRoots: scan.InstallRoots,
             Packages: packages,
@@ -110,15 +137,8 @@ public static class NodeDetector
             TestScript = overrides?.TestScript,
             CoverageScript = overrides?.CoverageScript,
             CoverageFile = coverageFile,
+            MemoryPerWorkerMb = memoryPerWorkerMb,
         };
-
-        return new(
-            RepositoryRoot: scan.RepositoryRoot,
-            Repository: repository,
-            Reason: "npm packages found",
-            OverridesError: error,
-            WatchedDirectories: watched
-        );
     }
 
     // The overrides' packages narrow the detected ones and never add any; a name that matches nothing is reported
@@ -163,6 +183,19 @@ public static class NodeDetector
         return IsInsidePackage(file)
             ? (file, null)
             : (null, "node.coverageFile must be a relative path inside the package, so the default is used");
+    }
+
+    // A budget of nothing or less cannot size a worker, so it is refused and the automatic budget used
+    private static (int? MemoryPerWorkerMb, string? Error) ValidMemoryPerWorker(NodeOverrides? overrides)
+    {
+        if (overrides?.MemoryPerWorkerMb is not { } megabytes)
+        {
+            return (null, null);
+        }
+
+        return megabytes > 0
+            ? (megabytes, null)
+            : (null, "node.memoryPerWorkerMb must be a positive number, so the automatic budget is used");
     }
 
     // Relative, with no empty, . or .. segment and no backslash, so the path cannot leave the package's directory

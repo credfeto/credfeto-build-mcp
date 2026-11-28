@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Credfeto.Build.Node.Server.Detection;
@@ -322,6 +323,49 @@ public sealed class NodeDetectorTests : TestBase, IDisposable
         Assert.Null(repository.CoverageFile);
         Assert.Equal(
             expected: "node.coverageFile must be a relative path inside the package, so the default is used",
+            actual: detection.OverridesError
+        );
+    }
+
+    [Fact]
+    public async Task TheMemoryPerWorkerOverrideIsCarriedToTheRepositoryAsync()
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        await this.WriteOverridesAsync("""{ "node": { "memoryPerWorkerMb": 2048 } }""");
+
+        NodeDetection detection = await this.DetectAsync();
+
+        NodeRepository repository = Assert.IsType<NodeRepository>(detection.Repository);
+        Assert.Equal(expected: 2048, actual: repository.MemoryPerWorkerMb);
+        Assert.Null(detection.OverridesError);
+    }
+
+    [Fact]
+    public async Task NoMemoryPerWorkerOverrideLeavesTheBudgetAutomaticAsync()
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+
+        NodeRepository repository = await this.DetectRepositoryAsync();
+
+        Assert.Null(repository.MemoryPerWorkerMb);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-512)]
+    public async Task AMemoryPerWorkerThatIsNotPositiveIsRefusedAsync(int memoryPerWorkerMb)
+    {
+        await NpmRepository.WriteAsync(repository: this._repository, cancellationToken: this.CancellationToken());
+        await this.WriteOverridesAsync(
+            "{ \"node\": { \"memoryPerWorkerMb\": " + memoryPerWorkerMb.ToString(CultureInfo.InvariantCulture) + " } }"
+        );
+
+        NodeDetection detection = await this.DetectAsync();
+
+        NodeRepository repository = Assert.IsType<NodeRepository>(detection.Repository);
+        Assert.Null(repository.MemoryPerWorkerMb);
+        Assert.Equal(
+            expected: "node.memoryPerWorkerMb must be a positive number, so the automatic budget is used",
             actual: detection.OverridesError
         );
     }

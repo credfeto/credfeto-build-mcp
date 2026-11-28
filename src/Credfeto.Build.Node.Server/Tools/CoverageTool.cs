@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Coverage;
+using Credfeto.Build.Core.Jobs;
 using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Testing;
@@ -36,7 +37,7 @@ public sealed class CoverageTool : BuildTool
             title: "Measure npm line coverage",
             description: "Starts a job that runs the coverage script of the package chosen in package (test:coverage, or node.coverageScript in .ai/commands.json) with CI=true, installing first when node_modules is missing or older than the lock file, then reads the Cobertura report the script writes ("
                 + CoverageScripts.DEFAULT_FILE
-                + " in the package's directory, or node.coverageFile) and reports line coverage per package and Overall. The script must enable Vitest's cobertura reporter; nothing is added to it. With package all, a successful run always writes its figures into the Node section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-package run replaces only that package's row and sums Overall (Node) again from every row's line counts, leaving Overall unchanged when a row has no counts. Returns the job id at once; call job_result to wait for its outcome",
+                + " in the package's directory, or node.coverageFile) and reports line coverage per package and Overall. The script must enable Vitest's cobertura reporter; nothing is added to it. With package all, a successful run always writes its figures into the Node section and commit line of COVERAGE.md at the repository root, leaving every other section as it is; a single-package run replaces only that package's row and sums Overall (Node) again from every row's line counts, leaving Overall unchanged when a row has no counts. Vitest and Jest get --maxWorkers set to as many workers as the memory limit (cgroup, else MemAvailable) holds at 1536 MB each, or node.memoryPerWorkerMb, never more than the processor count; Jest also gets --workerIdleMemoryLimit at that budget. job_result reports the limit and worker count, and says when a step exiting 137 was most likely out of memory. Returns the job id at once; call job_result to wait for its outcome",
             schema: [package],
             readOnly: false
         )
@@ -80,13 +81,22 @@ public sealed class CoverageTool : BuildTool
         // option not to). A single-package run replaces only its package's row and sums Overall again from the rows'
         // line counts
         bool all = StringComparer.Ordinal.Equals(x: choice, y: ScriptTargets.ALL);
+        ResourceNote resources = this._context.Resources.Plan(
+            WorkerLimits.MemoryPerWorkerMb(repository: repository, coverage: true)
+        );
+        IReadOnlyList<ScriptRun> runs =
+        [
+            .. targets.Select(target =>
+                WorkerLimits.Apply(run: new(Package: target.Package, Script: target.Script), resources: resources)
+            ),
+        ];
 
         return await JobStarter.StartAsync(
             runner: this._context.Runner,
             repositoryRoot: repository.RepositoryRoot,
             timeout: repository.Timeout,
             kind: ToolNames.COVERAGE,
-            steps: JobSteps.ForScripts(repository: repository, targets: targets, npm: npm),
+            steps: JobSteps.ForRuns(repository: repository, runs: runs, npm: npm),
             testParser: CompositeTestOutputParser.For(targets.Select(static target => target.Package.TestRunner)),
             coverage: new(
                 Files: [.. components.Keys],
@@ -98,6 +108,8 @@ public sealed class CoverageTool : BuildTool
                 ReportComponent = all || targets.Count == 0 ? null : targets[0].Package.Name,
             },
             changedFiles: null,
+            note: null,
+            resources: resources,
             cancellationToken: cancellationToken
         );
     }

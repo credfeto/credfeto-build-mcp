@@ -26,4 +26,6 @@ public sealed record JobResult(
 )
 {
     public string? Note { get; init; }
+
+    public ResourceNote? Resources { get; init; }
 }

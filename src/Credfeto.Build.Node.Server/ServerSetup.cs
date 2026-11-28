@@ -2,6 +2,7 @@ using System;
 using Credfeto.Build.Core;
 using Credfeto.Build.Core.Configuration;
 using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Core.Resources;
 using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Workspace;
@@ -40,7 +41,8 @@ public static class ServerSetup
             .AddSingleton(provider => new NodeWorkspace(
                 initial: detection,
                 runner: provider.GetRequiredService<IJobRunner>(),
-                npm: provider.GetRequiredService<NpmLocator>()
+                npm: provider.GetRequiredService<NpmLocator>(),
+                resources: provider.GetRequiredService<MachineResources>()
             ))
             .AddSingleton(provider => new RepositoryWatcher(
                 repositoryRoot: environment.RepositoryRoot,

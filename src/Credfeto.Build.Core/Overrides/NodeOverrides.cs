@@ -12,5 +12,6 @@ public sealed record NodeOverrides(
     string? TestScript,
     string? CoverageScript,
     string? CoverageFile,
-    int? TimeoutMinutes
+    int? TimeoutMinutes,
+    int? MemoryPerWorkerMb
 );

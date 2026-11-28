@@ -116,6 +116,14 @@ internal sealed class RunningJob : IAsyncDisposable
         }
     }
 
+    public bool AnyStepExitedWith(int exitCode)
+    {
+        lock (this._lock)
+        {
+            return this._steps.Exists(step => step.ExitCode == exitCode);
+        }
+    }
+
     public void SetCoverage(CoverageSummary? coverage, IReadOnlyList<string> errors)
     {
         lock (this._lock)
@@ -218,6 +226,7 @@ internal sealed class RunningJob : IAsyncDisposable
             )
             {
                 Note = this.Definition.Note,
+                Resources = this.Definition.Resources,
             };
         }
     }

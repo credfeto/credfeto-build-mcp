@@ -536,6 +536,117 @@ public sealed class JobRunnerTests : TestBase, IDisposable
     }
 
     [Fact]
+    public async Task AStepKilledWithCode137IsReportedAsOutOfMemoryWithTheBudgetAsync()
+    {
+        this._launcher.Prints(step: "a", exitCode: 137);
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            Definition(continueOnFailure: false, parser: null, "a") with
+            {
+                Resources = new(
+                    Workers: 2,
+                    MemoryPerWorkerMb: 1536,
+                    MemoryLimitMb: 4096,
+                    MemoryLimitSource: "cgroup v2"
+                ),
+            }
+        );
+
+        Assert.Equal(expected: JobState.Failed, actual: result.State);
+        Assert.Equal(
+            expected: "A step exited with code 137, so it was most likely killed for running out of memory: the memory limit was 4096 MB (from cgroup v2) and it ran 2 worker(s) at 1536 MB each; a larger memoryPerWorkerMb in .ai/commands.json runs fewer workers",
+            actual: result.Message
+        );
+    }
+
+    [Fact]
+    public async Task AStepKilledWithCode137WithNoReadableLimitSaysSoAsync()
+    {
+        this._launcher.Prints(step: "a", exitCode: 137);
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            Definition(continueOnFailure: false, parser: null, "a") with
+            {
+                Resources = new(Workers: 8, MemoryPerWorkerMb: 1024, MemoryLimitMb: null, MemoryLimitSource: null),
+            }
+        );
+
+        Assert.Equal(
+            expected: "A step exited with code 137, so it was most likely killed for running out of memory: no memory limit could be read and it ran 8 worker(s) at 1024 MB each; a larger memoryPerWorkerMb in .ai/commands.json runs fewer workers",
+            actual: result.Message
+        );
+    }
+
+    [Fact]
+    public async Task AStepKilledWithCode137WithoutABudgetGetsTheGenericMessageAsync()
+    {
+        this._launcher.Prints(step: "a", exitCode: 137);
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(runner: runner, Definition(continueOnFailure: false, parser: null, "a"));
+
+        Assert.Equal(
+            expected: "A step exited with code 137, so it was most likely killed for running out of memory",
+            actual: result.Message
+        );
+        Assert.Null(result.Resources);
+    }
+
+    [Fact]
+    public async Task AnOrdinaryFailureHasNoOutOfMemoryMessageAsync()
+    {
+        this._launcher.Prints(step: "a", exitCode: 1);
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            Definition(continueOnFailure: false, parser: null, "a") with
+            {
+                Resources = new(
+                    Workers: 2,
+                    MemoryPerWorkerMb: 1536,
+                    MemoryLimitMb: 4096,
+                    MemoryLimitSource: "cgroup v2"
+                ),
+            }
+        );
+
+        Assert.Equal(expected: JobState.Failed, actual: result.State);
+        Assert.Null(result.Message);
+    }
+
+    [Fact]
+    public async Task TheDefinitionsResourcesAreInTheResultAsync()
+    {
+        ResourceNote resources = new(
+            Workers: 2,
+            MemoryPerWorkerMb: 1536,
+            MemoryLimitMb: 4096,
+            MemoryLimitSource: "cgroup v2"
+        );
+
+        await using JobRunner runner = this.CreateRunner();
+        JobResult result = await this.RunAsync(
+            runner: runner,
+            Definition(continueOnFailure: false, parser: null, "a") with
+            {
+                Resources = resources,
+            }
+        );
+
+        Assert.Equal(expected: resources, actual: result.Resources);
+        Assert.Contains(
+            expectedSubstring: "\"resources\":{\"workers\":2,\"memoryPerWorkerMb\":1536,\"memoryLimitMb\":4096,\"memoryLimitSource\":\"cgroup v2\"}",
+            actualString: JsonSerializer.Serialize(value: result, jsonTypeInfo: CoreJsonContext.Default.JobResult),
+            comparisonType: StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
     public async Task OldestFinishedJobsAreEvictedAsync()
     {
         await using JobRunner runner = this.CreateRunner(

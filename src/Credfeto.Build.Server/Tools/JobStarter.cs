@@ -91,6 +91,7 @@ public static class JobStarter
             coverage: coverage,
             changedFiles: changedFiles,
             note: null,
+            resources: null,
             cancellationToken: cancellationToken
         );
     }
@@ -105,6 +106,7 @@ public static class JobStarter
         JobCoverage coverage,
         IChangedFilesProbe? changedFiles,
         string? note,
+        ResourceNote? resources,
         CancellationToken cancellationToken
     )
     {
@@ -129,6 +131,7 @@ public static class JobStarter
             CoverageReportComponent = coverage.ReportComponent,
             CoverageLanguage = coverage.Language,
             CoverageComponents = coverage.Components,
+            Resources = resources,
         };
 
         JobStatus status = await runner.StartAsync(definition);

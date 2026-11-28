@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Credfeto.Build.Core.Jobs;
+using Credfeto.Build.Core.Resources;
 using Credfeto.Build.Node.Server.Commands;
 using Credfeto.Build.Node.Server.Detection;
 using Credfeto.Build.Node.Server.Testing;
@@ -121,7 +122,15 @@ public sealed class JobToolTests : TestBase, IDisposable
         Assert.False(condition: result.IsError, userMessage: Text(result));
         ProcessStep step = Assert.Single(this._runner.Started).Steps[^1];
         Assert.Equal(
-            expected: ["run", "test:noe2e", "--workspace=packages/web"],
+            expected:
+            [
+                "run",
+                "test:noe2e",
+                "--workspace=packages/web",
+                "--",
+                "--maxWorkers=4",
+                "--workerIdleMemoryLimit=1024MiB",
+            ],
             actual: step.Arguments,
             comparer: StringComparer.Ordinal
         );
@@ -172,7 +181,7 @@ public sealed class JobToolTests : TestBase, IDisposable
         JobDefinition definition = Assert.Single(this._runner.Started);
         ProcessStep step = definition.Steps[^1];
         Assert.Equal(
-            expected: ["run", "test:noe2e", "--", "packages/core"],
+            expected: ["run", "test:noe2e", "--", "--maxWorkers=4", "packages/core"],
             actual: step.Arguments,
             comparer: StringComparer.Ordinal
         );
@@ -224,7 +233,17 @@ public sealed class JobToolTests : TestBase, IDisposable
         Assert.False(condition: result.IsError, userMessage: Text(result));
         JobDefinition definition = Assert.Single(this._runner.Started);
         Assert.Equal(
-            expected: ["run", "test:noe2e", "--workspace=packages/web", "--", "src/a.test.ts", "src/b.test.ts"],
+            expected:
+            [
+                "run",
+                "test:noe2e",
+                "--workspace=packages/web",
+                "--",
+                "--maxWorkers=4",
+                "--workerIdleMemoryLimit=1024MiB",
+                "src/a.test.ts",
+                "src/b.test.ts",
+            ],
             actual: definition.Steps[^1].Arguments,
             comparer: StringComparer.Ordinal
         );
@@ -251,7 +270,7 @@ public sealed class JobToolTests : TestBase, IDisposable
 
         Assert.False(condition: result.IsError, userMessage: Text(result));
         Assert.Equal(
-            expected: ["run", "test:noe2e", "--", "--coverage", "packages/core"],
+            expected: ["run", "test:noe2e", "--", "--maxWorkers=2", "--coverage", "packages/core"],
             actual: Assert.Single(this._runner.Started).Steps[^1].Arguments,
             comparer: StringComparer.Ordinal
         );
@@ -312,6 +331,105 @@ public sealed class JobToolTests : TestBase, IDisposable
         Assert.Equal(
             expected: "The test runner of app is not known, so the paths were passed to its test script after -- and may have been ignored, and no coverage switch was passed",
             actual: definition.Note
+        );
+    }
+
+    [Fact]
+    public async Task TestRecordsTheWorkerBudgetOnTheJobAsync()
+    {
+        CallToolResult result = await this.CallAsync(name: ToolNames.TEST, arguments: Arguments());
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.Equal(
+            expected: new ResourceNote(
+                Workers: 4,
+                MemoryPerWorkerMb: 1024,
+                MemoryLimitMb: 4096,
+                MemoryLimitSource: "cgroup v2"
+            ),
+            actual: Assert.Single(this._runner.Started).Resources
+        );
+    }
+
+    [Fact]
+    public async Task TestOfANodeTestPackageGetsNoWorkerArgumentsAsync()
+    {
+        CallToolResult result = await this.CallAsync(
+            name: ToolNames.TEST,
+            arguments: Arguments(("package", SampleWorkspace.CORE), ("scope", TestScripts.SCOPE_ALL))
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        Assert.DoesNotContain(Assert.Single(this._runner.Started).Steps[^1].Arguments, static argument =>
+            argument.StartsWith(value: "--maxWorkers", comparisonType: StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public async Task TestUsesTheRepositorysMemoryPerWorkerAsync()
+    {
+        NodeRepository repository = SampleWorkspace.Create(this._repository.Path) with { MemoryPerWorkerMb = 2048 };
+
+        CallToolResult result = await this.CallAsync(
+            repository: repository,
+            name: ToolNames.TEST,
+            arguments: Arguments(("package", SampleWorkspace.WEB))
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(
+            expected:
+            [
+                "run",
+                "test:noe2e",
+                "--workspace=packages/web",
+                "--",
+                "--maxWorkers=2",
+                "--workerIdleMemoryLimit=2048MiB",
+            ],
+            actual: definition.Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(expected: 2, actual: definition.Resources?.Workers);
+        Assert.Equal(expected: 2048, actual: definition.Resources?.MemoryPerWorkerMb);
+    }
+
+    [Fact]
+    public async Task TestWithNoReadableMemoryLimitRunsAWorkerPerProcessorAsync()
+    {
+        MachineResources unknown = new(memory: FixedMemorySource.None, processorCount: 3);
+        NodeDetection detection = TestTools.Detected(SampleWorkspace.Create(this._repository.Path));
+        BuildTool tool = TestTools.Find(
+            tools: TestTools.Catalog(
+                detection: detection,
+                runner: this._runner,
+                npm: TestTools.FakeNpm,
+                resources: unknown
+            ),
+            name: ToolNames.TEST
+        );
+
+        CallToolResult result = await tool.CallAsync(
+            arguments: Arguments(),
+            cancellationToken: this.CancellationToken()
+        );
+
+        Assert.False(condition: result.IsError, userMessage: Text(result));
+        JobDefinition definition = Assert.Single(this._runner.Started);
+        Assert.Equal(
+            expected: ["run", "test", "--", "--maxWorkers=3"],
+            actual: definition.Steps[^1].Arguments,
+            comparer: StringComparer.Ordinal
+        );
+        Assert.Equal(
+            expected: new ResourceNote(
+                Workers: 3,
+                MemoryPerWorkerMb: 1024,
+                MemoryLimitMb: null,
+                MemoryLimitSource: null
+            ),
+            actual: definition.Resources
         );
     }
 

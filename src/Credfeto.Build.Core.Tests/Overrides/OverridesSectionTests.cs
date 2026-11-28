@@ -22,7 +22,8 @@ public sealed class OverridesSectionTests : TestBase
                 "testScript": "test:unit",
                 "coverageScript": "test:coverage",
                 "coverageFile": "coverage/cobertura-coverage.xml",
-                "timeoutMinutes": 20
+                "timeoutMinutes": 20,
+                "memoryPerWorkerMb": 2048
               }
             }
             """
@@ -39,6 +40,7 @@ public sealed class OverridesSectionTests : TestBase
         Assert.Equal(expected: "test:coverage", actual: node.CoverageScript);
         Assert.Equal(expected: "coverage/cobertura-coverage.xml", actual: node.CoverageFile);
         Assert.Equal(expected: 20, actual: node.TimeoutMinutes);
+        Assert.Equal(expected: 2048, actual: node.MemoryPerWorkerMb);
     }
 
     [Fact]
