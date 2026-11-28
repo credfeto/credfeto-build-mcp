@@ -17,6 +17,8 @@ public static class PythonCommands
     private const string STAMP_SCRIPT =
         "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2] + '\\n')";
 
+    private static readonly IReadOnlyList<string> PytestOptions = ["-p", "no:cacheprovider", "--color=no", "-rfE"];
+
     private static readonly IReadOnlyList<string> PipInstall =
     [
         "-m",
@@ -68,9 +70,44 @@ public static class PythonCommands
         return Step(
             name: "test " + context.Project.Name,
             fileName: context.Environment.Python,
-            arguments: ["-m", PYTEST_MODULE, "-p", "no:cacheprovider", "--color=no", "-rfE"],
+            arguments: ["-m", PYTEST_MODULE, .. PytestOptions],
             context: context
         );
+    }
+
+    // coverage run -m pytest with the same flags as test, then coverage xml. The repository's own coverage settings
+    // (.coveragerc, [tool.coverage]) apply; only the data file and the report are the server's. A failed run stops
+    // the job, so no report is made from it
+    public static IReadOnlyList<ProcessStep> Coverage(InstallContext context)
+    {
+        Dictionary<string, string> environment = new(Environment(context.Environment), StringComparer.Ordinal)
+        {
+            ["COVERAGE_FILE"] = context.Environment.CoverageDataPath,
+        };
+
+        return
+        [
+            Step(
+                name: "coverage " + context.Project.Name,
+                fileName: context.Environment.Python,
+                arguments: ["-m", COVERAGE_MODULE, "run", "-m", PYTEST_MODULE, .. PytestOptions],
+                context: context
+            ) with
+            {
+                Environment = environment,
+                StopJobOnFailure = true,
+            },
+            Step(
+                name: "coverage report " + context.Project.Name,
+                fileName: context.Environment.Python,
+                arguments: ["-m", COVERAGE_MODULE, "xml", "-o", context.Environment.CoverageReportPath],
+                context: context
+            ) with
+            {
+                Environment = environment,
+                StopJobOnFailure = true,
+            },
+        ];
     }
 
     public static ProcessStep Flake8(InstallContext context, string flake8, IReadOnlyList<string> files)

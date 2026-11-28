@@ -11,6 +11,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ## [Unreleased]
 ### Security
 ### Added
+- Python server `coverage` tool: coverage run -m pytest, per-project rows in COVERAGE.md (#60)
 ### Fixed
 ### Changed
 - Node test and coverage cap Jest/Vitest workers to the memory limit; memoryPerWorkerMb override (#69)
